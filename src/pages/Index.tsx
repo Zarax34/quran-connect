@@ -3,23 +3,44 @@ import { SplashScreen } from "@/components/SplashScreen";
 import { CenterSelectionScreen } from "@/components/CenterSelectionScreen";
 import { LoginScreen } from "@/components/LoginScreen";
 import { DashboardScreen } from "@/components/DashboardScreen";
+import { useAuth } from "@/contexts/AuthContext";
 
 type AppState = "splash" | "centerSelection" | "login" | "dashboard";
 
 const Index = () => {
+  const { user, isLoading, isSuperAdmin, selectedCenterId, setSelectedCenterId } = useAuth();
   const [appState, setAppState] = useState<AppState>("splash");
-  const [selectedCenter, setSelectedCenter] = useState<string | null>(null);
+  const [selectedCenterName, setSelectedCenterName] = useState<string>("");
 
   useEffect(() => {
-    // Simulate splash screen duration
+    // Splash screen duration
     const timer = setTimeout(() => {
-      setAppState("centerSelection");
+      if (user) {
+        // If user is logged in and has selected a center (or is super_admin)
+        if (isSuperAdmin || selectedCenterId) {
+          setAppState("dashboard");
+        } else {
+          setAppState("centerSelection");
+        }
+      } else {
+        setAppState("centerSelection");
+      }
     }, 2500);
     return () => clearTimeout(timer);
   }, []);
 
-  const handleCenterSelect = (centerId: string) => {
-    setSelectedCenter(centerId);
+  // After auth state changes
+  useEffect(() => {
+    if (!isLoading && appState !== "splash") {
+      if (user && (isSuperAdmin || selectedCenterId)) {
+        setAppState("dashboard");
+      }
+    }
+  }, [user, isLoading, isSuperAdmin, selectedCenterId, appState]);
+
+  const handleCenterSelect = (centerId: string, centerName: string) => {
+    setSelectedCenterId(centerId);
+    setSelectedCenterName(centerName);
     setAppState("login");
   };
 
@@ -29,7 +50,8 @@ const Index = () => {
 
   const handleBackToCenter = () => {
     setAppState("centerSelection");
-    setSelectedCenter(null);
+    setSelectedCenterId(null);
+    setSelectedCenterName("");
   };
 
   return (
@@ -42,7 +64,8 @@ const Index = () => {
         <LoginScreen 
           onLogin={handleLogin} 
           onBack={handleBackToCenter}
-          centerName={selectedCenter || ""}
+          centerName={selectedCenterName}
+          centerId={selectedCenterId || ""}
         />
       )}
       {appState === "dashboard" && <DashboardScreen />}
