@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { 
   LayoutDashboard, 
   Users, 
@@ -6,60 +6,178 @@ import {
   Bell, 
   Settings,
   BookOpen,
-  TrendingUp,
   Calendar,
   UserCheck,
   AlertCircle,
   ChevronLeft,
   GraduationCap,
-  Wallet
+  Wallet,
+  LogOut,
+  Loader2,
+  Building2,
+  Plus
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 type TabType = "home" | "students" | "reports" | "notifications" | "settings";
 
-const STATS = [
-  { label: "إجمالي الطلاب", value: "324", icon: Users, color: "primary" },
-  { label: "الحلقات النشطة", value: "12", icon: BookOpen, color: "secondary" },
-  { label: "المعلمين", value: "18", icon: GraduationCap, color: "info" },
-  { label: "نسبة الحضور", value: "87%", icon: UserCheck, color: "success" },
-];
+interface Stats {
+  totalStudents: number;
+  activeHalaqat: number;
+  totalTeachers: number;
+  attendanceRate: number;
+}
 
-const QUICK_ACTIONS = [
-  { label: "إضافة تقرير", icon: FileText, href: "#" },
-  { label: "إدارة الحلقات", icon: BookOpen, href: "#" },
-  { label: "الرسوم", icon: Wallet, href: "#" },
-  { label: "الإعلانات", icon: Bell, href: "#" },
-];
-
-const RECENT_REPORTS = [
-  { 
-    id: 1, 
-    teacher: "أحمد محمد", 
-    halqa: "حلقة الفجر", 
-    date: "اليوم", 
-    status: "pending" 
-  },
-  { 
-    id: 2, 
-    teacher: "عبدالله علي", 
-    halqa: "حلقة العصر", 
-    date: "أمس", 
-    status: "approved" 
-  },
-  { 
-    id: 3, 
-    teacher: "محمد خالد", 
-    halqa: "حلقة المغرب", 
-    date: "منذ يومين", 
-    status: "approved" 
-  },
-];
+interface RecentReport {
+  id: string;
+  teacher_name: string;
+  halqa_name: string;
+  report_date: string;
+  status: string;
+}
 
 export const DashboardScreen = () => {
   const [activeTab, setActiveTab] = useState<TabType>("home");
+  const { user, profile, signOut, isSuperAdmin, selectedCenterId } = useAuth();
+  const [stats, setStats] = useState<Stats>({
+    totalStudents: 0,
+    activeHalaqat: 0,
+    totalTeachers: 0,
+    attendanceRate: 0,
+  });
+  const [recentReports, setRecentReports] = useState<RecentReport[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, [selectedCenterId, isSuperAdmin]);
+
+  const fetchDashboardData = async () => {
+    try {
+      // Fetch students count
+      let studentsQuery = supabase
+        .from("students")
+        .select("*", { count: "exact", head: true })
+        .eq("is_active", true);
+      
+      if (!isSuperAdmin && selectedCenterId) {
+        studentsQuery = studentsQuery.eq("center_id", selectedCenterId);
+      }
+      
+      const { count: studentsCount } = await studentsQuery;
+
+      // Fetch halaqat count
+      let halaqatQuery = supabase
+        .from("halaqat")
+        .select("*", { count: "exact", head: true })
+        .eq("is_active", true);
+      
+      if (!isSuperAdmin && selectedCenterId) {
+        halaqatQuery = halaqatQuery.eq("center_id", selectedCenterId);
+      }
+      
+      const { count: halaqatCount } = await halaqatQuery;
+
+      // Fetch teachers count (users with teacher role)
+      const { count: teachersCount } = await supabase
+        .from("user_roles")
+        .select("*", { count: "exact", head: true })
+        .eq("role", "teacher");
+
+      setStats({
+        totalStudents: studentsCount || 0,
+        activeHalaqat: halaqatCount || 0,
+        totalTeachers: teachersCount || 0,
+        attendanceRate: 0, // Will calculate from reports
+      });
+
+      // Fetch recent reports
+      let reportsQuery = supabase
+        .from("reports")
+        .select(`
+          id,
+          report_date,
+          status,
+          halaqat!inner(name, center_id),
+          profiles!reports_teacher_id_fkey(full_name)
+        `)
+        .order("created_at", { ascending: false })
+        .limit(5);
+
+      if (!isSuperAdmin && selectedCenterId) {
+        reportsQuery = reportsQuery.eq("halaqat.center_id", selectedCenterId);
+      }
+
+      const { data: reportsData } = await reportsQuery;
+
+      if (reportsData) {
+        setRecentReports(
+          reportsData.map((r: any) => ({
+            id: r.id,
+            teacher_name: r.profiles?.full_name || "غير معروف",
+            halqa_name: r.halaqat?.name || "غير معروف",
+            report_date: r.report_date,
+            status: r.status,
+          }))
+        );
+      }
+    } catch (error) {
+      console.error("Error fetching dashboard data:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSignOut = async () => {
+    await signOut();
+    toast.success("تم تسجيل الخروج بنجاح");
+    window.location.reload();
+  };
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    if (date.toDateString() === today.toDateString()) {
+      return "اليوم";
+    } else if (date.toDateString() === yesterday.toDateString()) {
+      return "أمس";
+    } else {
+      return date.toLocaleDateString("ar-SA");
+    }
+  };
+
+  const STATS_CONFIG = [
+    { label: "إجمالي الطلاب", value: stats.totalStudents.toString(), icon: Users, color: "primary" },
+    { label: "الحلقات النشطة", value: stats.activeHalaqat.toString(), icon: BookOpen, color: "secondary" },
+    { label: "المعلمين", value: stats.totalTeachers.toString(), icon: GraduationCap, color: "primary" },
+    { label: "نسبة الحضور", value: `${stats.attendanceRate}%`, icon: UserCheck, color: "secondary" },
+  ];
+
+  const QUICK_ACTIONS = [
+    { label: "إضافة تقرير", icon: FileText, href: "#" },
+    { label: "إدارة الحلقات", icon: BookOpen, href: "#" },
+    { label: "الرسوم", icon: Wallet, href: "#" },
+    { label: "الإعلانات", icon: Bell, href: "#" },
+  ];
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-10 h-10 text-primary animate-spin mx-auto" />
+          <p className="text-muted-foreground mt-4">جاري التحميل...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background pb-24">
@@ -69,7 +187,14 @@ export const DashboardScreen = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-primary-foreground/80 text-sm">مرحباً بك</p>
-              <h1 className="text-xl font-bold">مسؤول النظام</h1>
+              <h1 className="text-xl font-bold">
+                {profile?.full_name || user?.email || "مسؤول النظام"}
+              </h1>
+              {isSuperAdmin && (
+                <Badge variant="secondary" className="mt-1 bg-primary-foreground/20 text-primary-foreground">
+                  مسؤول النظام
+                </Badge>
+              )}
             </div>
             <div className="flex items-center gap-2">
               <Button 
@@ -79,6 +204,14 @@ export const DashboardScreen = () => {
               >
                 <Bell className="w-5 h-5" />
                 <span className="absolute top-1 right-1 w-2 h-2 bg-secondary rounded-full" />
+              </Button>
+              <Button 
+                size="icon" 
+                variant="ghost" 
+                className="text-primary-foreground hover:bg-primary-foreground/10"
+                onClick={handleSignOut}
+              >
+                <LogOut className="w-5 h-5" />
               </Button>
             </div>
           </div>
@@ -92,7 +225,7 @@ export const DashboardScreen = () => {
       <main className="px-4 -mt-2 space-y-6">
         {/* Stats Grid */}
         <div className="grid grid-cols-2 gap-3">
-          {STATS.map((stat, index) => (
+          {STATS_CONFIG.map((stat, index) => (
             <Card 
               key={stat.label}
               className="p-4 bg-card border-border/50 animate-scale-in"
@@ -103,8 +236,8 @@ export const DashboardScreen = () => {
                   <p className="text-sm text-muted-foreground">{stat.label}</p>
                   <p className="text-2xl font-bold text-foreground mt-1">{stat.value}</p>
                 </div>
-                <div className={`w-10 h-10 rounded-xl bg-${stat.color}/10 flex items-center justify-center`}>
-                  <stat.icon className={`w-5 h-5 text-${stat.color}`} />
+                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                  <stat.icon className="w-5 h-5 text-primary" />
                 </div>
               </div>
             </Card>
@@ -143,7 +276,7 @@ export const DashboardScreen = () => {
             <div className="flex-1">
               <h3 className="font-semibold text-foreground">ملخص اليوم</h3>
               <p className="text-sm text-muted-foreground">
-                3 تقارير جديدة • 5 طلاب غائبين
+                {recentReports.length} تقارير جديدة
               </p>
             </div>
             <ChevronLeft className="w-5 h-5 text-muted-foreground" />
@@ -161,54 +294,63 @@ export const DashboardScreen = () => {
             </Button>
           </div>
           <div className="space-y-3">
-            {RECENT_REPORTS.map((report, index) => (
-              <Card 
-                key={report.id}
-                className="p-4 bg-card border-border/50 animate-slide-up"
-                style={{ animationDelay: `${(index + 8) * 0.1}s` }}
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                    <FileText className="w-5 h-5 text-primary" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <h4 className="font-medium text-foreground truncate">
-                        {report.teacher}
-                      </h4>
-                      <Badge 
-                        variant={report.status === "approved" ? "default" : "secondary"}
-                        className={report.status === "approved" 
-                          ? "bg-success/10 text-success hover:bg-success/20" 
-                          : "bg-warning/10 text-warning hover:bg-warning/20"
-                        }
-                      >
-                        {report.status === "approved" ? "معتمد" : "قيد المراجعة"}
-                      </Badge>
+            {recentReports.length > 0 ? (
+              recentReports.map((report, index) => (
+                <Card 
+                  key={report.id}
+                  className="p-4 bg-card border-border/50 animate-slide-up"
+                  style={{ animationDelay: `${(index + 8) * 0.1}s` }}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                      <FileText className="w-5 h-5 text-primary" />
                     </div>
-                    <p className="text-sm text-muted-foreground">
-                      {report.halqa} • {report.date}
-                    </p>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-medium text-foreground truncate">
+                          {report.teacher_name}
+                        </h4>
+                        <Badge 
+                          variant={report.status === "approved" ? "default" : "secondary"}
+                          className={report.status === "approved" 
+                            ? "bg-primary/10 text-primary hover:bg-primary/20" 
+                            : "bg-secondary/50 text-secondary-foreground hover:bg-secondary/60"
+                          }
+                        >
+                          {report.status === "approved" ? "معتمد" : "قيد المراجعة"}
+                        </Badge>
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        {report.halqa_name} • {formatDate(report.report_date)}
+                      </p>
+                    </div>
+                    <ChevronLeft className="w-5 h-5 text-muted-foreground" />
                   </div>
-                  <ChevronLeft className="w-5 h-5 text-muted-foreground" />
-                </div>
+                </Card>
+              ))
+            ) : (
+              <Card className="p-8 bg-card border-border/50 text-center">
+                <FileText className="w-12 h-12 text-muted-foreground/50 mx-auto" />
+                <p className="text-muted-foreground mt-4">لا توجد تقارير حتى الآن</p>
               </Card>
-            ))}
+            )}
           </div>
         </section>
 
-        {/* Alert Card */}
-        <Card className="p-4 bg-warning/10 border-warning/30">
-          <div className="flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-warning shrink-0 mt-0.5" />
-            <div>
-              <h4 className="font-medium text-foreground">تنبيه مهم</h4>
-              <p className="text-sm text-muted-foreground mt-1">
-                يوجد 12 طالب لم يسددوا رسوم الشهر الحالي
-              </p>
+        {/* Alert Card - Only show if there's data */}
+        {stats.totalStudents === 0 && (
+          <Card className="p-4 bg-primary/10 border-primary/30">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-primary shrink-0 mt-0.5" />
+              <div>
+                <h4 className="font-medium text-foreground">ابدأ بإضافة البيانات</h4>
+                <p className="text-sm text-muted-foreground mt-1">
+                  لم يتم إضافة أي طلاب بعد. قم بإضافة الطلاب والحلقات للبدء.
+                </p>
+              </div>
             </div>
-          </div>
-        </Card>
+          </Card>
+        )}
       </main>
 
       {/* Bottom Navigation */}
