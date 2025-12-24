@@ -15,7 +15,8 @@ import {
   LogOut,
   Loader2,
   Building2,
-  Plus
+  UserCog,
+  ArrowRight
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -23,8 +24,14 @@ import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { CentersManagement } from "./admin/CentersManagement";
+import { StudentsManagement } from "./admin/StudentsManagement";
+import { HalaqatManagement } from "./admin/HalaqatManagement";
+import { UsersManagement } from "./admin/UsersManagement";
+import { AnnouncementsManagement } from "./admin/AnnouncementsManagement";
 
 type TabType = "home" | "students" | "reports" | "notifications" | "settings";
+type AdminView = "dashboard" | "centers" | "students" | "halaqat" | "users" | "announcements";
 
 interface Stats {
   totalStudents: number;
@@ -43,6 +50,7 @@ interface RecentReport {
 
 export const DashboardScreen = () => {
   const [activeTab, setActiveTab] = useState<TabType>("home");
+  const [adminView, setAdminView] = useState<AdminView>("dashboard");
   const { user, profile, signOut, isSuperAdmin, selectedCenterId } = useAuth();
   const [stats, setStats] = useState<Stats>({
     totalStudents: 0,
@@ -59,7 +67,6 @@ export const DashboardScreen = () => {
 
   const fetchDashboardData = async () => {
     try {
-      // Fetch students count
       let studentsQuery = supabase
         .from("students")
         .select("*", { count: "exact", head: true })
@@ -71,7 +78,6 @@ export const DashboardScreen = () => {
       
       const { count: studentsCount } = await studentsQuery;
 
-      // Fetch halaqat count
       let halaqatQuery = supabase
         .from("halaqat")
         .select("*", { count: "exact", head: true })
@@ -83,7 +89,6 @@ export const DashboardScreen = () => {
       
       const { count: halaqatCount } = await halaqatQuery;
 
-      // Fetch teachers count (users with teacher role)
       const { count: teachersCount } = await supabase
         .from("user_roles")
         .select("*", { count: "exact", head: true })
@@ -93,39 +98,8 @@ export const DashboardScreen = () => {
         totalStudents: studentsCount || 0,
         activeHalaqat: halaqatCount || 0,
         totalTeachers: teachersCount || 0,
-        attendanceRate: 0, // Will calculate from reports
+        attendanceRate: 0,
       });
-
-      // Fetch recent reports
-      let reportsQuery = supabase
-        .from("reports")
-        .select(`
-          id,
-          report_date,
-          status,
-          halaqat!inner(name, center_id),
-          profiles!reports_teacher_id_fkey(full_name)
-        `)
-        .order("created_at", { ascending: false })
-        .limit(5);
-
-      if (!isSuperAdmin && selectedCenterId) {
-        reportsQuery = reportsQuery.eq("halaqat.center_id", selectedCenterId);
-      }
-
-      const { data: reportsData } = await reportsQuery;
-
-      if (reportsData) {
-        setRecentReports(
-          reportsData.map((r: any) => ({
-            id: r.id,
-            teacher_name: r.profiles?.full_name || "غير معروف",
-            halqa_name: r.halaqat?.name || "غير معروف",
-            report_date: r.report_date,
-            status: r.status,
-          }))
-        );
-      }
     } catch (error) {
       console.error("Error fetching dashboard data:", error);
     } finally {
@@ -139,21 +113,6 @@ export const DashboardScreen = () => {
     window.location.reload();
   };
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    const today = new Date();
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
-
-    if (date.toDateString() === today.toDateString()) {
-      return "اليوم";
-    } else if (date.toDateString() === yesterday.toDateString()) {
-      return "أمس";
-    } else {
-      return date.toLocaleDateString("ar-SA");
-    }
-  };
-
   const STATS_CONFIG = [
     { label: "إجمالي الطلاب", value: stats.totalStudents.toString(), icon: Users, color: "primary" },
     { label: "الحلقات النشطة", value: stats.activeHalaqat.toString(), icon: BookOpen, color: "secondary" },
@@ -161,11 +120,12 @@ export const DashboardScreen = () => {
     { label: "نسبة الحضور", value: `${stats.attendanceRate}%`, icon: UserCheck, color: "secondary" },
   ];
 
-  const QUICK_ACTIONS = [
-    { label: "إضافة تقرير", icon: FileText, href: "#" },
-    { label: "إدارة الحلقات", icon: BookOpen, href: "#" },
-    { label: "الرسوم", icon: Wallet, href: "#" },
-    { label: "الإعلانات", icon: Bell, href: "#" },
+  const ADMIN_ACTIONS = [
+    { label: "المراكز", icon: Building2, view: "centers" as AdminView },
+    { label: "الحلقات", icon: BookOpen, view: "halaqat" as AdminView },
+    { label: "الطلاب", icon: Users, view: "students" as AdminView },
+    { label: "المستخدمين", icon: UserCog, view: "users" as AdminView },
+    { label: "الإعلانات", icon: Bell, view: "announcements" as AdminView },
   ];
 
   if (isLoading) {
@@ -179,9 +139,37 @@ export const DashboardScreen = () => {
     );
   }
 
+  // Render admin sub-views
+  if (adminView !== "dashboard") {
+    return (
+      <div className="min-h-screen bg-background pb-24">
+        <header className="sticky top-0 z-40 bg-card border-b border-border px-4 py-4">
+          <div className="flex items-center gap-3">
+            <Button size="icon" variant="ghost" onClick={() => setAdminView("dashboard")}>
+              <ArrowRight className="w-5 h-5" />
+            </Button>
+            <h1 className="text-lg font-bold text-foreground">
+              {adminView === "centers" && "إدارة المراكز"}
+              {adminView === "students" && "إدارة الطلاب"}
+              {adminView === "halaqat" && "إدارة الحلقات"}
+              {adminView === "users" && "إدارة المستخدمين"}
+              {adminView === "announcements" && "إدارة الإعلانات"}
+            </h1>
+          </div>
+        </header>
+        <main className="px-4 py-6">
+          {adminView === "centers" && <CentersManagement />}
+          {adminView === "students" && <StudentsManagement />}
+          {adminView === "halaqat" && <HalaqatManagement />}
+          {adminView === "users" && <UsersManagement />}
+          {adminView === "announcements" && <AnnouncementsManagement />}
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background pb-24">
-      {/* Header */}
       <header className="sticky top-0 z-40 bg-primary text-primary-foreground">
         <div className="px-4 py-5">
           <div className="flex items-center justify-between">
@@ -203,7 +191,6 @@ export const DashboardScreen = () => {
                 className="text-primary-foreground hover:bg-primary-foreground/10 relative"
               >
                 <Bell className="w-5 h-5" />
-                <span className="absolute top-1 right-1 w-2 h-2 bg-secondary rounded-full" />
               </Button>
               <Button 
                 size="icon" 
@@ -216,20 +203,15 @@ export const DashboardScreen = () => {
             </div>
           </div>
         </div>
-        
-        {/* Curved bottom */}
         <div className="h-6 bg-background rounded-t-3xl" />
       </header>
 
-      {/* Main Content */}
       <main className="px-4 -mt-2 space-y-6">
-        {/* Stats Grid */}
         <div className="grid grid-cols-2 gap-3">
           {STATS_CONFIG.map((stat, index) => (
             <Card 
               key={stat.label}
-              className="p-4 bg-card border-border/50 animate-scale-in"
-              style={{ animationDelay: `${index * 0.1}s` }}
+              className="p-4 bg-card border-border/50"
             >
               <div className="flex items-start justify-between">
                 <div>
@@ -244,17 +226,14 @@ export const DashboardScreen = () => {
           ))}
         </div>
 
-        {/* Quick Actions */}
         <section>
-          <h2 className="text-lg font-semibold text-foreground mb-3">
-            إجراءات سريعة
-          </h2>
-          <div className="grid grid-cols-4 gap-3">
-            {QUICK_ACTIONS.map((action, index) => (
+          <h2 className="text-lg font-semibold text-foreground mb-3">الإدارة</h2>
+          <div className="grid grid-cols-3 gap-3">
+            {ADMIN_ACTIONS.map((action) => (
               <button
                 key={action.label}
-                className="flex flex-col items-center gap-2 p-3 rounded-xl bg-card border border-border/50 hover:bg-accent/50 transition-colors animate-slide-up"
-                style={{ animationDelay: `${(index + 4) * 0.1}s` }}
+                onClick={() => setAdminView(action.view)}
+                className="flex flex-col items-center gap-2 p-3 rounded-xl bg-card border border-border/50 hover:bg-accent/50 transition-colors"
               >
                 <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
                   <action.icon className="w-6 h-6 text-primary" />
@@ -267,77 +246,6 @@ export const DashboardScreen = () => {
           </div>
         </section>
 
-        {/* Today's Summary */}
-        <Card className="p-4 bg-gradient-to-br from-primary/5 to-secondary/5 border-primary/20">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center">
-              <Calendar className="w-6 h-6 text-primary" />
-            </div>
-            <div className="flex-1">
-              <h3 className="font-semibold text-foreground">ملخص اليوم</h3>
-              <p className="text-sm text-muted-foreground">
-                {recentReports.length} تقارير جديدة
-              </p>
-            </div>
-            <ChevronLeft className="w-5 h-5 text-muted-foreground" />
-          </div>
-        </Card>
-
-        {/* Recent Reports */}
-        <section>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-lg font-semibold text-foreground">
-              آخر التقارير
-            </h2>
-            <Button variant="ghost" size="sm" className="text-primary">
-              عرض الكل
-            </Button>
-          </div>
-          <div className="space-y-3">
-            {recentReports.length > 0 ? (
-              recentReports.map((report, index) => (
-                <Card 
-                  key={report.id}
-                  className="p-4 bg-card border-border/50 animate-slide-up"
-                  style={{ animationDelay: `${(index + 8) * 0.1}s` }}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                      <FileText className="w-5 h-5 text-primary" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <h4 className="font-medium text-foreground truncate">
-                          {report.teacher_name}
-                        </h4>
-                        <Badge 
-                          variant={report.status === "approved" ? "default" : "secondary"}
-                          className={report.status === "approved" 
-                            ? "bg-primary/10 text-primary hover:bg-primary/20" 
-                            : "bg-secondary/50 text-secondary-foreground hover:bg-secondary/60"
-                          }
-                        >
-                          {report.status === "approved" ? "معتمد" : "قيد المراجعة"}
-                        </Badge>
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        {report.halqa_name} • {formatDate(report.report_date)}
-                      </p>
-                    </div>
-                    <ChevronLeft className="w-5 h-5 text-muted-foreground" />
-                  </div>
-                </Card>
-              ))
-            ) : (
-              <Card className="p-8 bg-card border-border/50 text-center">
-                <FileText className="w-12 h-12 text-muted-foreground/50 mx-auto" />
-                <p className="text-muted-foreground mt-4">لا توجد تقارير حتى الآن</p>
-              </Card>
-            )}
-          </div>
-        </section>
-
-        {/* Alert Card - Only show if there's data */}
         {stats.totalStudents === 0 && (
           <Card className="p-4 bg-primary/10 border-primary/30">
             <div className="flex items-start gap-3">
@@ -353,7 +261,6 @@ export const DashboardScreen = () => {
         )}
       </main>
 
-      {/* Bottom Navigation */}
       <nav className="nav-float">
         <div className="flex items-center gap-1">
           {[
