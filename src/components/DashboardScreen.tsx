@@ -29,10 +29,11 @@ import { StudentsManagement } from "./admin/StudentsManagement";
 import { HalaqatManagement } from "./admin/HalaqatManagement";
 import { UsersManagement } from "./admin/UsersManagement";
 import { AnnouncementsManagement } from "./admin/AnnouncementsManagement";
+import { ParentsManagement } from "./admin/ParentsManagement";
 import { DailyReports } from "./teacher/DailyReports";
 
 type TabType = "home" | "students" | "reports" | "notifications" | "settings";
-type AdminView = "dashboard" | "centers" | "students" | "halaqat" | "users" | "announcements" | "reports";
+type AdminView = "dashboard" | "centers" | "students" | "halaqat" | "users" | "announcements" | "parents" | "reports";
 
 interface Stats {
   totalStudents: number;
@@ -126,6 +127,7 @@ export const DashboardScreen = () => {
     { label: "الحلقات", icon: BookOpen, view: "halaqat" as AdminView },
     { label: "الطلاب", icon: Users, view: "students" as AdminView },
     { label: "المستخدمين", icon: UserCog, view: "users" as AdminView },
+    { label: "أولياء الأمور", icon: UserCheck, view: "parents" as AdminView },
     { label: "الإعلانات", icon: Bell, view: "announcements" as AdminView },
     { label: "التقارير", icon: FileText, view: "reports" as AdminView },
   ];
@@ -156,6 +158,7 @@ export const DashboardScreen = () => {
               {adminView === "halaqat" && "إدارة الحلقات"}
               {adminView === "users" && "إدارة المستخدمين"}
               {adminView === "announcements" && "إدارة الإعلانات"}
+              {adminView === "parents" && "إدارة أولياء الأمور"}
               {adminView === "reports" && "التقارير اليومية"}
             </h1>
           </div>
@@ -166,6 +169,7 @@ export const DashboardScreen = () => {
           {adminView === "halaqat" && <HalaqatManagement />}
           {adminView === "users" && <UsersManagement />}
           {adminView === "announcements" && <AnnouncementsManagement />}
+          {adminView === "parents" && <ParentsManagement />}
           {adminView === "reports" && <DailyReports />}
         </main>
       </div>
