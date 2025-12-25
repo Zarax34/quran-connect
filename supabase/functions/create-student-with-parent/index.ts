@@ -80,11 +80,12 @@ serve(async (req) => {
     const parentUserId = parentAuthData.user.id;
     console.log("Parent user created:", parentUserId);
 
-    // 2. Create parent profile
+    // 2. Create parent profile with email for login lookup
     await supabase.from("profiles").upsert({
       id: parentUserId,
       full_name: parentName,
       phone: parentPhone,
+      email: parentEmail,
     });
 
     // 3. Add parent role
@@ -141,11 +142,12 @@ serve(async (req) => {
     const studentUserId = studentAuthData.user.id;
     console.log("Student user created:", studentUserId);
 
-    // 6. Create student profile
+    // 6. Create student profile with email for login lookup
     await supabase.from("profiles").upsert({
       id: studentUserId,
       full_name: studentName,
       phone: studentPhone || null,
+      email: studentEmail,
     });
 
     // 7. Add student role
