@@ -49,10 +49,16 @@ interface Halqa {
   name: string;
 }
 
+interface Center {
+  id: string;
+  name: string;
+}
+
 export const StudentsManagement = () => {
   const { isSuperAdmin, selectedCenterId } = useAuth();
   const [students, setStudents] = useState<Student[]>([]);
   const [halaqat, setHalaqat] = useState<Halqa[]>([]);
+  const [centers, setCenters] = useState<Center[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -62,12 +68,16 @@ export const StudentsManagement = () => {
     phone: "",
     birth_date: "",
     halqa_id: "",
+    center_id: "",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     fetchStudents();
     fetchHalaqat();
+    if (isSuperAdmin) {
+      fetchCenters();
+    }
   }, [selectedCenterId, isSuperAdmin]);
 
   const fetchStudents = async () => {
@@ -111,6 +121,21 @@ export const StudentsManagement = () => {
     }
   };
 
+  const fetchCenters = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("centers")
+        .select("id, name")
+        .eq("is_active", true)
+        .order("name");
+      
+      if (error) throw error;
+      setCenters(data || []);
+    } catch (error) {
+      console.error("Error fetching centers:", error);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.full_name.trim()) {
@@ -118,8 +143,9 @@ export const StudentsManagement = () => {
       return;
     }
 
-    if (!selectedCenterId && !isSuperAdmin) {
-      toast.error("يرجى اختيار مركز أولاً");
+    const centerId = editingStudent?.center_id || formData.center_id || selectedCenterId;
+    if (!centerId) {
+      toast.error("يرجى اختيار المركز");
       return;
     }
 
@@ -138,7 +164,7 @@ export const StudentsManagement = () => {
             phone: formData.phone || null,
             birth_date: formData.birth_date || null,
             halqa_id: formData.halqa_id || null,
-            center_id: editingStudent?.center_id || selectedCenterId,
+            center_id: centerId,
           },
           id: editingStudent?.id,
         }),
@@ -190,12 +216,13 @@ export const StudentsManagement = () => {
       phone: student.phone || "",
       birth_date: student.birth_date || "",
       halqa_id: student.halqa_id || "",
+      center_id: student.center_id || "",
     });
     setIsDialogOpen(true);
   };
 
   const resetForm = () => {
-    setFormData({ full_name: "", phone: "", birth_date: "", halqa_id: "" });
+    setFormData({ full_name: "", phone: "", birth_date: "", halqa_id: "", center_id: selectedCenterId || "" });
     setEditingStudent(null);
   };
 
@@ -234,6 +261,28 @@ export const StudentsManagement = () => {
               </DialogTitle>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
+              {isSuperAdmin && !editingStudent && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">
+                    المركز *
+                  </label>
+                  <Select
+                    value={formData.center_id}
+                    onValueChange={(value) => setFormData({ ...formData, center_id: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="اختر المركز" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {centers.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <div className="space-y-2">
                 <label className="text-sm font-medium text-foreground">
                   اسم الطالب *
