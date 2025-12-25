@@ -37,6 +37,7 @@ import { CoursesManagement } from "./admin/CoursesManagement";
 import { ActivitiesManagement } from "./admin/ActivitiesManagement";
 import { DailyReports } from "./teacher/DailyReports";
 import { ParentDashboard } from "./parent/ParentDashboard";
+import { StudentDashboard } from "./student/StudentDashboard";
 
 type TabType = "home" | "students" | "reports" | "notifications" | "settings";
 type AdminView = "dashboard" | "centers" | "students" | "halaqat" | "users" | "announcements" | "parents" | "courses" | "activities" | "reports";
@@ -70,6 +71,7 @@ export const DashboardScreen = () => {
   const [isLoading, setIsLoading] = useState(true);
   
   const isParent = roles.some(r => r.role === "parent");
+  const isStudent = roles.some(r => r.role === "student");
   const isAdmin = isSuperAdmin || roles.some(r => r.role === "center_admin");
 
   useEffect(() => {
@@ -193,6 +195,50 @@ export const DashboardScreen = () => {
         </header>
         <main className="px-4 -mt-2">
           <ParentDashboard />
+        </main>
+      </div>
+    );
+  }
+
+  // Render Student Dashboard if user is a student and not admin
+  if (isStudent && !isAdmin) {
+    return (
+      <div className="min-h-screen bg-background pb-24">
+        <header className="sticky top-0 z-40 bg-primary text-primary-foreground">
+          <div className="px-4 py-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-primary-foreground/80 text-sm">مرحباً بك</p>
+                <h1 className="text-xl font-bold">
+                  {profile?.full_name || user?.email || "الطالب"}
+                </h1>
+                <Badge variant="secondary" className="mt-1 bg-primary-foreground/20 text-primary-foreground">
+                  طالب
+                </Badge>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button 
+                  size="icon" 
+                  variant="ghost" 
+                  className="text-primary-foreground hover:bg-primary-foreground/10 relative"
+                >
+                  <Bell className="w-5 h-5" />
+                </Button>
+                <Button 
+                  size="icon" 
+                  variant="ghost" 
+                  className="text-primary-foreground hover:bg-primary-foreground/10"
+                  onClick={handleSignOut}
+                >
+                  <LogOut className="w-5 h-5" />
+                </Button>
+              </div>
+            </div>
+          </div>
+          <div className="h-6 bg-background rounded-t-3xl" />
+        </header>
+        <main className="px-4 -mt-2">
+          <StudentDashboard />
         </main>
       </div>
     );
