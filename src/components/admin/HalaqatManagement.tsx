@@ -50,6 +50,11 @@ interface Teacher {
   full_name: string;
 }
 
+interface Center {
+  id: string;
+  name: string;
+}
+
 const CATEGORIES = [
   { value: "boys", label: "بنين" },
   { value: "girls", label: "بنات" },
@@ -61,6 +66,7 @@ export const HalaqatManagement = () => {
   const { isSuperAdmin, selectedCenterId } = useAuth();
   const [halaqat, setHalaqat] = useState<Halqa[]>([]);
   const [teachers, setTeachers] = useState<Teacher[]>([]);
+  const [centers, setCenters] = useState<Center[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingHalqa, setEditingHalqa] = useState<Halqa | null>(null);
@@ -69,12 +75,16 @@ export const HalaqatManagement = () => {
     category: "",
     max_students: "20",
     teacher_id: "",
+    center_id: "",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     fetchHalaqat();
     fetchTeachers();
+    if (isSuperAdmin) {
+      fetchCenters();
+    }
   }, [selectedCenterId, isSuperAdmin]);
 
   const fetchHalaqat = async () => {
@@ -137,6 +147,21 @@ export const HalaqatManagement = () => {
     }
   };
 
+  const fetchCenters = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("centers")
+        .select("id, name")
+        .eq("is_active", true)
+        .order("name");
+      
+      if (error) throw error;
+      setCenters(data || []);
+    } catch (error) {
+      console.error("Error fetching centers:", error);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name.trim()) {
@@ -144,9 +169,9 @@ export const HalaqatManagement = () => {
       return;
     }
 
-    const centerId = editingHalqa?.center_id || selectedCenterId;
+    const centerId = editingHalqa?.center_id || formData.center_id || selectedCenterId;
     if (!centerId) {
-      toast.error("يرجى اختيار مركز أولاً من القائمة الجانبية");
+      toast.error("يرجى اختيار المركز");
       return;
     }
 
@@ -217,12 +242,13 @@ export const HalaqatManagement = () => {
       category: halqa.category || "",
       max_students: halqa.max_students?.toString() || "20",
       teacher_id: halqa.teacher_id || "",
+      center_id: halqa.center_id || "",
     });
     setIsDialogOpen(true);
   };
 
   const resetForm = () => {
-    setFormData({ name: "", category: "", max_students: "20", teacher_id: "" });
+    setFormData({ name: "", category: "", max_students: "20", teacher_id: "", center_id: selectedCenterId || "" });
     setEditingHalqa(null);
   };
 
@@ -259,6 +285,28 @@ export const HalaqatManagement = () => {
               </DialogTitle>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
+              {isSuperAdmin && !editingHalqa && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">
+                    المركز *
+                  </label>
+                  <Select
+                    value={formData.center_id}
+                    onValueChange={(value) => setFormData({ ...formData, center_id: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="اختر المركز" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {centers.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <div className="space-y-2">
                 <label className="text-sm font-medium text-foreground">
                   اسم الحلقة *
