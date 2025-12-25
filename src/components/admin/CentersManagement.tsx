@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { Building2, Plus, Pencil, Trash2, MapPin, Loader2 } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Building2, Plus, Pencil, Trash2, MapPin, Loader2, Camera, X } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,6 +31,7 @@ interface Center {
   location: string | null;
   description: string | null;
   is_active: boolean;
+  logo_url: string | null;
 }
 
 export const CentersManagement = () => {
@@ -38,6 +39,9 @@ export const CentersManagement = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingCenter, setEditingCenter] = useState<Center | null>(null);
+  const [centerLogo, setCenterLogo] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [formData, setFormData] = useState({
     name: "",
     location: "",
@@ -66,6 +70,40 @@ export const CentersManagement = () => {
     }
   };
 
+  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setCenterLogo(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setLogoPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const uploadLogo = async (centerId: string): Promise<string | null> => {
+    if (!centerLogo) return null;
+    
+    const fileExt = centerLogo.name.split('.').pop();
+    const fileName = `${centerId}.${fileExt}`;
+    
+    const { error } = await supabase.storage
+      .from('center-logos')
+      .upload(fileName, centerLogo, { upsert: true });
+    
+    if (error) {
+      console.error('Error uploading logo:', error);
+      return null;
+    }
+    
+    const { data } = supabase.storage
+      .from('center-logos')
+      .getPublicUrl(fileName);
+    
+    return data.publicUrl;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name.trim()) {
@@ -77,25 +115,73 @@ export const CentersManagement = () => {
 
     try {
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const response = await fetch(`${supabaseUrl}/functions/v1/admin-operations`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: editingCenter ? "update" : "insert",
-          table: "centers",
-          data: {
-            name: formData.name,
-            location: formData.location || null,
-            description: formData.description || null,
-          },
-          id: editingCenter?.id,
-        }),
-      });
+      
+      if (editingCenter) {
+        // Upload logo if changed
+        let logoUrl = editingCenter.logo_url;
+        if (centerLogo) {
+          logoUrl = await uploadLogo(editingCenter.id);
+        }
+        
+        const response = await fetch(`${supabaseUrl}/functions/v1/admin-operations`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "update",
+            table: "centers",
+            data: {
+              name: formData.name,
+              location: formData.location || null,
+              description: formData.description || null,
+              logo_url: logoUrl,
+            },
+            id: editingCenter.id,
+          }),
+        });
 
-      const result = await response.json();
-      if (!result.success) throw new Error(result.error);
+        const result = await response.json();
+        if (!result.success) throw new Error(result.error);
+        toast.success("تم تحديث المركز بنجاح");
+      } else {
+        // Create center first
+        const response = await fetch(`${supabaseUrl}/functions/v1/admin-operations`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "insert",
+            table: "centers",
+            data: {
+              name: formData.name,
+              location: formData.location || null,
+              description: formData.description || null,
+            },
+          }),
+        });
 
-      toast.success(editingCenter ? "تم تحديث المركز بنجاح" : "تم إضافة المركز بنجاح");
+        const result = await response.json();
+        if (!result.success) throw new Error(result.error);
+        
+        // Upload logo if selected
+        if (centerLogo && result.data?.id) {
+          const logoUrl = await uploadLogo(result.data.id);
+          if (logoUrl) {
+            // Update center with logo URL
+            await fetch(`${supabaseUrl}/functions/v1/admin-operations`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                action: "update",
+                table: "centers",
+                data: { logo_url: logoUrl },
+                id: result.data.id,
+              }),
+            });
+          }
+        }
+        
+        toast.success("تم إضافة المركز بنجاح");
+      }
+
       setIsDialogOpen(false);
       resetForm();
       fetchCenters();
@@ -138,12 +224,15 @@ export const CentersManagement = () => {
       location: center.location || "",
       description: center.description || "",
     });
+    setLogoPreview(center.logo_url);
     setIsDialogOpen(true);
   };
 
   const resetForm = () => {
     setFormData({ name: "", location: "", description: "" });
     setEditingCenter(null);
+    setCenterLogo(null);
+    setLogoPreview(null);
   };
 
   if (isLoading) {
@@ -175,6 +264,64 @@ export const CentersManagement = () => {
               </DialogTitle>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
+              {/* Logo Upload */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">
+                  شعار المركز
+                </label>
+                <div className="flex items-center gap-4">
+                  <div 
+                    className="w-20 h-20 rounded-xl bg-muted flex items-center justify-center cursor-pointer overflow-hidden border-2 border-dashed border-border hover:border-primary transition-colors"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    {logoPreview ? (
+                      <img 
+                        src={logoPreview} 
+                        alt="شعار المركز" 
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <Camera className="w-8 h-8 text-muted-foreground" />
+                    )}
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      اختر شعار
+                    </Button>
+                    {logoPreview && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="text-destructive"
+                        onClick={() => {
+                          setCenterLogo(null);
+                          setLogoPreview(null);
+                          if (editingCenter) {
+                            setEditingCenter({ ...editingCenter, logo_url: null });
+                          }
+                        }}
+                      >
+                        <X className="w-4 h-4 mr-1" />
+                        إزالة
+                      </Button>
+                    )}
+                  </div>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleLogoChange}
+                  />
+                </div>
+              </div>
+
               <div className="space-y-2">
                 <label className="text-sm font-medium text-foreground">
                   اسم المركز *
@@ -239,8 +386,12 @@ export const CentersManagement = () => {
           {centers.map((center) => (
             <Card key={center.id} className="p-4">
               <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-                  <Building2 className="w-6 h-6 text-primary" />
+                <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 overflow-hidden">
+                  {center.logo_url ? (
+                    <img src={center.logo_url} alt={center.name} className="w-full h-full object-cover" />
+                  ) : (
+                    <Building2 className="w-6 h-6 text-primary" />
+                  )}
                 </div>
                 <div className="flex-1 min-w-0">
                   <h3 className="font-semibold text-foreground">{center.name}</h3>

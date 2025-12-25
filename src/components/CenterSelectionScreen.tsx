@@ -111,9 +111,13 @@ export const CenterSelectionScreen = ({ onSelectCenter }: Props) => {
               style={{ animationDelay: `${index * 0.1}s` }}
             >
               <div className="flex items-center gap-4">
-                {/* Icon */}
-                <div className="w-14 h-14 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 group-hover:bg-primary/20 transition-colors">
-                  <Building2 className="w-7 h-7 text-primary" />
+                {/* Icon/Logo */}
+                <div className="w-14 h-14 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 group-hover:bg-primary/20 transition-colors overflow-hidden">
+                  {center.logo_url ? (
+                    <img src={center.logo_url} alt={center.name} className="w-full h-full object-cover" />
+                  ) : (
+                    <Building2 className="w-7 h-7 text-primary" />
+                  )}
                 </div>
 
                 {/* Info */}

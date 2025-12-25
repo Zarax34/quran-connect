@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { Users, Plus, Pencil, Trash2, Search, Loader2, Phone, Calendar, UserPlus, Copy, Check } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Users, Plus, Pencil, Trash2, Search, Loader2, Phone, Calendar, UserPlus, Copy, Check, Camera, X } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ExportCredentials } from "./ExportCredentials";
@@ -42,6 +42,7 @@ interface Student {
   is_active: boolean;
   halqa_id: string | null;
   center_id: string;
+  photo_url: string | null;
   halaqat?: { name: string } | null;
 }
 
@@ -71,6 +72,9 @@ export const StudentsManagement = () => {
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [showCredentials, setShowCredentials] = useState(false);
   const [credentials, setCredentials] = useState<CredentialsInfo | null>(null);
+  const [studentPhoto, setStudentPhoto] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [formData, setFormData] = useState({
     full_name: "",
     phone: "",
@@ -149,6 +153,40 @@ export const StudentsManagement = () => {
     }
   };
 
+  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setStudentPhoto(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPhotoPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const uploadPhoto = async (studentId: string): Promise<string | null> => {
+    if (!studentPhoto) return null;
+    
+    const fileExt = studentPhoto.name.split('.').pop();
+    const fileName = `${studentId}.${fileExt}`;
+    
+    const { error } = await supabase.storage
+      .from('student-photos')
+      .upload(fileName, studentPhoto, { upsert: true });
+    
+    if (error) {
+      console.error('Error uploading photo:', error);
+      return null;
+    }
+    
+    const { data } = supabase.storage
+      .from('student-photos')
+      .getPublicUrl(fileName);
+    
+    return data.publicUrl;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.full_name.trim()) {
@@ -180,6 +218,12 @@ export const StudentsManagement = () => {
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       
       if (editingStudent) {
+        // Upload photo if changed
+        let photoUrl = editingStudent.photo_url;
+        if (studentPhoto) {
+          photoUrl = await uploadPhoto(editingStudent.id);
+        }
+        
         // Update existing student
         const response = await fetch(`${supabaseUrl}/functions/v1/admin-operations`, {
           method: "POST",
@@ -192,6 +236,7 @@ export const StudentsManagement = () => {
               phone: formData.phone || null,
               birth_date: formData.birth_date || null,
               halqa_id: formData.halqa_id || null,
+              photo_url: photoUrl,
             },
             id: editingStudent.id,
           }),
@@ -220,6 +265,24 @@ export const StudentsManagement = () => {
 
         const result = await response.json();
         if (result.error) throw new Error(result.error);
+        
+        // Upload photo if selected
+        if (studentPhoto && result.studentId) {
+          const photoUrl = await uploadPhoto(result.studentId);
+          if (photoUrl) {
+            // Update student with photo URL
+            await fetch(`${supabaseUrl}/functions/v1/admin-operations`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                action: "update",
+                table: "students",
+                data: { photo_url: photoUrl },
+                id: result.studentId,
+              }),
+            });
+          }
+        }
         
         // Show credentials dialog
         setCredentials(result.credentials);
@@ -291,6 +354,8 @@ export const StudentsManagement = () => {
       relationship: "أب",
     });
     setEditingStudent(null);
+    setStudentPhoto(null);
+    setPhotoPreview(null);
   };
 
   const filteredStudents = students.filter(
@@ -359,6 +424,64 @@ export const StudentsManagement = () => {
                   <Users className="w-4 h-4" />
                   معلومات الطالب
                 </h3>
+              </div>
+              
+              {/* Photo Upload */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">
+                  صورة الطالب
+                </label>
+                <div className="flex items-center gap-4">
+                  <div 
+                    className="w-20 h-20 rounded-full bg-muted flex items-center justify-center cursor-pointer overflow-hidden border-2 border-dashed border-border hover:border-primary transition-colors"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    {photoPreview || (editingStudent?.photo_url) ? (
+                      <img 
+                        src={photoPreview || editingStudent?.photo_url || ''} 
+                        alt="صورة الطالب" 
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <Camera className="w-8 h-8 text-muted-foreground" />
+                    )}
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      اختر صورة
+                    </Button>
+                    {(photoPreview || editingStudent?.photo_url) && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="text-destructive"
+                        onClick={() => {
+                          setStudentPhoto(null);
+                          setPhotoPreview(null);
+                          if (editingStudent) {
+                            setEditingStudent({ ...editingStudent, photo_url: null });
+                          }
+                        }}
+                      >
+                        <X className="w-4 h-4 mr-1" />
+                        إزالة
+                      </Button>
+                    )}
+                  </div>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handlePhotoChange}
+                  />
+                </div>
               </div>
               
               <div className="space-y-2">
@@ -526,8 +649,12 @@ export const StudentsManagement = () => {
           {filteredStudents.map((student) => (
             <Card key={student.id} className="p-4">
               <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                  <Users className="w-6 h-6 text-primary" />
+                <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center shrink-0 overflow-hidden">
+                  {student.photo_url ? (
+                    <img src={student.photo_url} alt={student.full_name} className="w-full h-full object-cover" />
+                  ) : (
+                    <Users className="w-6 h-6 text-primary" />
+                  )}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
