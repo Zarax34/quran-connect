@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Users, Plus, Pencil, Trash2, Search, Loader2, Phone, Calendar } from "lucide-react";
+import { Users, Plus, Pencil, Trash2, Search, Loader2, Phone, Calendar, UserPlus, Copy, Check } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -54,6 +54,11 @@ interface Center {
   name: string;
 }
 
+interface CredentialsInfo {
+  student: { username: string; password: string };
+  parent: { username: string; password: string };
+}
+
 export const StudentsManagement = () => {
   const { isSuperAdmin, selectedCenterId } = useAuth();
   const [students, setStudents] = useState<Student[]>([]);
@@ -63,12 +68,19 @@ export const StudentsManagement = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
+  const [showCredentials, setShowCredentials] = useState(false);
+  const [credentials, setCredentials] = useState<CredentialsInfo | null>(null);
   const [formData, setFormData] = useState({
     full_name: "",
     phone: "",
     birth_date: "",
     halqa_id: "",
     center_id: "",
+    // Parent info
+    parent_name: "",
+    parent_phone: "",
+    parent_work: "",
+    relationship: "أب",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -149,31 +161,71 @@ export const StudentsManagement = () => {
       return;
     }
 
+    // For new students, require parent info
+    if (!editingStudent) {
+      if (!formData.parent_name.trim()) {
+        toast.error("يرجى إدخال اسم ولي الأمر");
+        return;
+      }
+      if (!formData.parent_phone.trim()) {
+        toast.error("يرجى إدخال رقم هاتف ولي الأمر");
+        return;
+      }
+    }
+
     setIsSubmitting(true);
 
     try {
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const response = await fetch(`${supabaseUrl}/functions/v1/admin-operations`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: editingStudent ? "update" : "insert",
-          table: "students",
-          data: {
-            full_name: formData.full_name,
-            phone: formData.phone || null,
-            birth_date: formData.birth_date || null,
-            halqa_id: formData.halqa_id || null,
-            center_id: centerId,
-          },
-          id: editingStudent?.id,
-        }),
-      });
+      
+      if (editingStudent) {
+        // Update existing student
+        const response = await fetch(`${supabaseUrl}/functions/v1/admin-operations`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "update",
+            table: "students",
+            data: {
+              full_name: formData.full_name,
+              phone: formData.phone || null,
+              birth_date: formData.birth_date || null,
+              halqa_id: formData.halqa_id || null,
+            },
+            id: editingStudent.id,
+          }),
+        });
 
-      const result = await response.json();
-      if (!result.success) throw new Error(result.error);
+        const result = await response.json();
+        if (!result.success) throw new Error(result.error);
+        toast.success("تم تحديث الطالب بنجاح");
+      } else {
+        // Create new student with parent (auto-create accounts)
+        const response = await fetch(`${supabaseUrl}/functions/v1/create-student-with-parent`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            studentName: formData.full_name,
+            studentPhone: formData.phone || null,
+            studentBirthDate: formData.birth_date || null,
+            halqaId: formData.halqa_id || null,
+            centerId,
+            parentName: formData.parent_name,
+            parentPhone: formData.parent_phone,
+            parentWork: formData.parent_work || null,
+            relationship: formData.relationship,
+          }),
+        });
 
-      toast.success(editingStudent ? "تم تحديث الطالب بنجاح" : "تم إضافة الطالب بنجاح");
+        const result = await response.json();
+        if (result.error) throw new Error(result.error);
+        
+        // Show credentials dialog
+        setCredentials(result.credentials);
+        setShowCredentials(true);
+        toast.success("تم إضافة الطالب وولي الأمر بنجاح");
+      }
+
       setIsDialogOpen(false);
       resetForm();
       fetchStudents();
@@ -217,12 +269,26 @@ export const StudentsManagement = () => {
       birth_date: student.birth_date || "",
       halqa_id: student.halqa_id || "",
       center_id: student.center_id || "",
+      parent_name: "",
+      parent_phone: "",
+      parent_work: "",
+      relationship: "أب",
     });
     setIsDialogOpen(true);
   };
 
   const resetForm = () => {
-    setFormData({ full_name: "", phone: "", birth_date: "", halqa_id: "", center_id: selectedCenterId || "" });
+    setFormData({ 
+      full_name: "", 
+      phone: "", 
+      birth_date: "", 
+      halqa_id: "", 
+      center_id: selectedCenterId || "",
+      parent_name: "",
+      parent_phone: "",
+      parent_work: "",
+      relationship: "أب",
+    });
     setEditingStudent(null);
   };
 
@@ -254,7 +320,7 @@ export const StudentsManagement = () => {
               إضافة طالب
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-md">
+          <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>
                 {editingStudent ? "تعديل الطالب" : "إضافة طالب جديد"}
@@ -283,9 +349,18 @@ export const StudentsManagement = () => {
                   </Select>
                 </div>
               )}
+              
+              {/* Student Info Section */}
+              <div className="border-b pb-2">
+                <h3 className="font-semibold text-foreground flex items-center gap-2">
+                  <Users className="w-4 h-4" />
+                  معلومات الطالب
+                </h3>
+              </div>
+              
               <div className="space-y-2">
                 <label className="text-sm font-medium text-foreground">
-                  اسم الطالب *
+                  اسم الطالب * (سيكون اسم المستخدم)
                 </label>
                 <Input
                   value={formData.full_name}
@@ -295,12 +370,12 @@ export const StudentsManagement = () => {
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium text-foreground">
-                  رقم الهاتف
+                  رقم هاتف الطالب (سيكون كلمة المرور)
                 </label>
                 <Input
                   value={formData.phone}
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  placeholder="أدخل رقم الهاتف"
+                  placeholder="إن لم يكن له رقم، سيستخدم رقم ولي الأمر"
                   dir="ltr"
                 />
               </div>
@@ -334,7 +409,74 @@ export const StudentsManagement = () => {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="flex gap-2 justify-end">
+
+              {/* Parent Info Section - Only for new students */}
+              {!editingStudent && (
+                <>
+                  <div className="border-b pb-2 pt-4">
+                    <h3 className="font-semibold text-foreground flex items-center gap-2">
+                      <UserPlus className="w-4 h-4" />
+                      معلومات ولي الأمر (سيتم إنشاء حساب تلقائي)
+                    </h3>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground">
+                      اسم ولي الأمر * (سيكون اسم المستخدم)
+                    </label>
+                    <Input
+                      value={formData.parent_name}
+                      onChange={(e) => setFormData({ ...formData, parent_name: e.target.value })}
+                      placeholder="أدخل اسم ولي الأمر"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground">
+                      رقم هاتف ولي الأمر * (سيكون كلمة المرور)
+                    </label>
+                    <Input
+                      value={formData.parent_phone}
+                      onChange={(e) => setFormData({ ...formData, parent_phone: e.target.value })}
+                      placeholder="أدخل رقم الهاتف"
+                      dir="ltr"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground">
+                      عمل ولي الأمر
+                    </label>
+                    <Input
+                      value={formData.parent_work}
+                      onChange={(e) => setFormData({ ...formData, parent_work: e.target.value })}
+                      placeholder="أدخل عمل ولي الأمر"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground">
+                      صلة القرابة
+                    </label>
+                    <Select
+                      value={formData.relationship}
+                      onValueChange={(value) => setFormData({ ...formData, relationship: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="اختر صلة القرابة" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="أب">أب</SelectItem>
+                        <SelectItem value="أم">أم</SelectItem>
+                        <SelectItem value="أخ">أخ</SelectItem>
+                        <SelectItem value="عم">عم</SelectItem>
+                        <SelectItem value="خال">خال</SelectItem>
+                        <SelectItem value="جد">جد</SelectItem>
+                        <SelectItem value="أخرى">أخرى</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </>
+              )}
+
+              <div className="flex gap-2 justify-end pt-4">
                 <Button
                   type="button"
                   variant="outline"
@@ -442,6 +584,54 @@ export const StudentsManagement = () => {
           ))}
         </div>
       )}
+
+      {/* Credentials Dialog */}
+      <Dialog open={showCredentials} onOpenChange={setShowCredentials}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Check className="w-5 h-5 text-primary" />
+              تم إنشاء الحسابات بنجاح
+            </DialogTitle>
+          </DialogHeader>
+          {credentials && (
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                يرجى حفظ بيانات الدخول التالية:
+              </p>
+              
+              <Card className="p-4 space-y-2">
+                <h4 className="font-semibold text-foreground">حساب الطالب</h4>
+                <div className="text-sm space-y-1">
+                  <p><span className="text-muted-foreground">اسم المستخدم:</span> {credentials.student.username}</p>
+                  <p><span className="text-muted-foreground">كلمة المرور:</span> {credentials.student.password}</p>
+                </div>
+              </Card>
+              
+              <Card className="p-4 space-y-2">
+                <h4 className="font-semibold text-foreground">حساب ولي الأمر</h4>
+                <div className="text-sm space-y-1">
+                  <p><span className="text-muted-foreground">اسم المستخدم:</span> {credentials.parent.username}</p>
+                  <p><span className="text-muted-foreground">كلمة المرور:</span> {credentials.parent.password}</p>
+                </div>
+              </Card>
+              
+              <Button 
+                onClick={() => {
+                  const text = `حساب الطالب:\nاسم المستخدم: ${credentials.student.username}\nكلمة المرور: ${credentials.student.password}\n\nحساب ولي الأمر:\nاسم المستخدم: ${credentials.parent.username}\nكلمة المرور: ${credentials.parent.password}`;
+                  navigator.clipboard.writeText(text);
+                  toast.success("تم نسخ بيانات الدخول");
+                }}
+                variant="outline"
+                className="w-full gap-2"
+              >
+                <Copy className="w-4 h-4" />
+                نسخ بيانات الدخول
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
