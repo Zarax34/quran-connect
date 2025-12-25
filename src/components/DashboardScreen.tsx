@@ -281,6 +281,98 @@ export const DashboardScreen = () => {
     );
   }
 
+  // Render content based on active tab
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case "students":
+        return <StudentsManagement />;
+      case "reports":
+        return <DailyReports />;
+      case "notifications":
+        return (
+          <div className="space-y-4">
+            <h2 className="text-xl font-bold text-foreground">الإشعارات</h2>
+            <Card className="p-8 text-center">
+              <Bell className="w-12 h-12 mx-auto text-muted-foreground/50" />
+              <p className="text-muted-foreground mt-4">لا توجد إشعارات جديدة</p>
+            </Card>
+          </div>
+        );
+      case "settings":
+        return (
+          <div className="space-y-4">
+            <h2 className="text-xl font-bold text-foreground">الإعدادات</h2>
+            <Card className="p-4 space-y-4">
+              <div className="flex items-center justify-between">
+                <span className="text-foreground">تسجيل الخروج</span>
+                <Button variant="destructive" onClick={handleSignOut} className="gap-2">
+                  <LogOut className="w-4 h-4" />
+                  خروج
+                </Button>
+              </div>
+            </Card>
+          </div>
+        );
+      default:
+        return (
+          <>
+            <div className="grid grid-cols-2 gap-3">
+              {STATS_CONFIG.map((stat, index) => (
+                <Card 
+                  key={stat.label}
+                  className="p-4 bg-card border-border/50"
+                >
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="text-sm text-muted-foreground">{stat.label}</p>
+                      <p className="text-2xl font-bold text-foreground mt-1">{stat.value}</p>
+                    </div>
+                    <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                      <stat.icon className="w-5 h-5 text-primary" />
+                    </div>
+                  </div>
+                </Card>
+              ))}
+            </div>
+
+            <section>
+              <h2 className="text-lg font-semibold text-foreground mb-3">الإدارة</h2>
+              <div className="grid grid-cols-3 gap-3">
+                {ADMIN_ACTIONS.map((action) => (
+                  <button
+                    key={action.label}
+                    onClick={() => setAdminView(action.view)}
+                    className="flex flex-col items-center gap-2 p-3 rounded-xl bg-card border border-border/50 hover:bg-accent/50 transition-colors"
+                  >
+                    <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
+                      <action.icon className="w-6 h-6 text-primary" />
+                    </div>
+                    <span className="text-xs text-foreground font-medium text-center">
+                      {action.label}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </section>
+
+            {stats.totalStudents === 0 && (
+              <Card className="p-4 bg-primary/10 border-primary/30">
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 text-primary shrink-0 mt-0.5" />
+                  <div>
+                    <h4 className="font-medium text-foreground">ابدأ بإضافة البيانات</h4>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      لم يتم إضافة أي طلاب بعد. قم بإضافة الطلاب والحلقات للبدء.
+                    </p>
+                  </div>
+                </div>
+              </Card>
+            )}
+          </>
+        );
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background pb-24">
       <header className="sticky top-0 z-40 bg-primary text-primary-foreground">
@@ -320,58 +412,7 @@ export const DashboardScreen = () => {
       </header>
 
       <main className="px-4 -mt-2 space-y-6">
-        <div className="grid grid-cols-2 gap-3">
-          {STATS_CONFIG.map((stat, index) => (
-            <Card 
-              key={stat.label}
-              className="p-4 bg-card border-border/50"
-            >
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">{stat.label}</p>
-                  <p className="text-2xl font-bold text-foreground mt-1">{stat.value}</p>
-                </div>
-                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-                  <stat.icon className="w-5 h-5 text-primary" />
-                </div>
-              </div>
-            </Card>
-          ))}
-        </div>
-
-        <section>
-          <h2 className="text-lg font-semibold text-foreground mb-3">الإدارة</h2>
-          <div className="grid grid-cols-3 gap-3">
-            {ADMIN_ACTIONS.map((action) => (
-              <button
-                key={action.label}
-                onClick={() => setAdminView(action.view)}
-                className="flex flex-col items-center gap-2 p-3 rounded-xl bg-card border border-border/50 hover:bg-accent/50 transition-colors"
-              >
-                <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
-                  <action.icon className="w-6 h-6 text-primary" />
-                </div>
-                <span className="text-xs text-foreground font-medium text-center">
-                  {action.label}
-                </span>
-              </button>
-            ))}
-          </div>
-        </section>
-
-        {stats.totalStudents === 0 && (
-          <Card className="p-4 bg-primary/10 border-primary/30">
-            <div className="flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-primary shrink-0 mt-0.5" />
-              <div>
-                <h4 className="font-medium text-foreground">ابدأ بإضافة البيانات</h4>
-                <p className="text-sm text-muted-foreground mt-1">
-                  لم يتم إضافة أي طلاب بعد. قم بإضافة الطلاب والحلقات للبدء.
-                </p>
-              </div>
-            </div>
-          </Card>
-        )}
+        {renderTabContent()}
       </main>
 
       <nav className="nav-float">
