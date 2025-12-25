@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { 
   Users, 
   FileText, 
@@ -312,6 +313,12 @@ export const ParentDashboard = () => {
 
   return (
     <div className="space-y-6">
+      {/* Header with Notifications */}
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-bold">لوحة ولي الأمر</h2>
+        <NotificationBell />
+      </div>
+
       {/* Pending Approvals Alert */}
       {pendingApprovals.length > 0 && (
         <Card className="p-4 bg-warning/10 border-warning/30">
