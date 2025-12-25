@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Users, Plus, Pencil, Trash2, Search, Loader2, Phone, Calendar, UserPlus, Copy, Check } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { ExportCredentials } from "./ExportCredentials";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -310,16 +311,18 @@ export const StudentsManagement = () => {
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <h2 className="text-xl font-bold text-foreground">إدارة الطلاب</h2>
-        <Dialog open={isDialogOpen} onOpenChange={(open) => {
-          setIsDialogOpen(open);
-          if (!open) resetForm();
-        }}>
-          <DialogTrigger asChild>
-            <Button className="gap-2">
-              <Plus className="w-4 h-4" />
-              إضافة طالب
-            </Button>
-          </DialogTrigger>
+        <div className="flex gap-2 flex-wrap">
+          <ExportCredentials centerId={selectedCenterId} />
+          <Dialog open={isDialogOpen} onOpenChange={(open) => {
+            setIsDialogOpen(open);
+            if (!open) resetForm();
+          }}>
+            <DialogTrigger asChild>
+              <Button className="gap-2">
+                <Plus className="w-4 h-4" />
+                إضافة طالب
+              </Button>
+            </DialogTrigger>
           <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>
@@ -497,6 +500,7 @@ export const StudentsManagement = () => {
             </form>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       {/* Search */}
