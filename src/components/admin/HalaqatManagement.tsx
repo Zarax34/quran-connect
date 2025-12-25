@@ -144,8 +144,9 @@ export const HalaqatManagement = () => {
       return;
     }
 
-    if (!selectedCenterId && !isSuperAdmin) {
-      toast.error("يرجى اختيار مركز أولاً");
+    const centerId = editingHalqa?.center_id || selectedCenterId;
+    if (!centerId) {
+      toast.error("يرجى اختيار مركز أولاً من القائمة الجانبية");
       return;
     }
 
@@ -164,7 +165,7 @@ export const HalaqatManagement = () => {
             category: formData.category || null,
             max_students: parseInt(formData.max_students) || 20,
             teacher_id: formData.teacher_id || null,
-            center_id: editingHalqa?.center_id || selectedCenterId,
+            center_id: centerId,
           },
           id: editingHalqa?.id,
         }),
