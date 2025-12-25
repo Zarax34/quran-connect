@@ -11,12 +11,14 @@ import {
   Clock,
   FileText,
   Award,
-  Loader2
+  Loader2,
+  BarChart3
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
+import { ProgressChart } from "./ProgressChart";
 
 interface StudentInfo {
   id: string;
@@ -294,12 +296,17 @@ export const StudentDashboard = () => {
         </Card>
       )}
 
-      {/* Tabs for Reports and Attendance */}
-      <Tabs defaultValue="reports" className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
+      {/* Tabs for Reports, Attendance, and Progress */}
+      <Tabs defaultValue="progress" className="w-full">
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="progress">التقدم</TabsTrigger>
           <TabsTrigger value="reports">التقارير</TabsTrigger>
           <TabsTrigger value="attendance">الحضور</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="progress" className="mt-4">
+          <ProgressChart reportEntries={reportEntries} />
+        </TabsContent>
 
         <TabsContent value="reports" className="mt-4 space-y-3">
           {reportEntries.length === 0 ? (
