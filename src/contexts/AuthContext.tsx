@@ -128,30 +128,21 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     
     if (!emailRegex.test(trimmedIdentifier)) {
       // User is logging in with their name - look up email from profiles
-      const { data: profileData } = await supabase
+      // Use wildcard pattern for flexible matching
+      const { data: profiles } = await supabase
         .from("profiles")
-        .select("email")
-        .ilike("full_name", trimmedIdentifier)
-        .maybeSingle();
+        .select("email, full_name")
+        .not("email", "is", null);
       
-      if (profileData?.email) {
-        email = profileData.email;
+      // Find profile with matching name (ignoring trailing/leading spaces)
+      const matchedProfile = profiles?.find(p => 
+        p.full_name?.trim() === trimmedIdentifier
+      );
+      
+      if (matchedProfile?.email) {
+        email = matchedProfile.email;
       } else {
-        // Try without exact match - search with trimmed comparison
-        const { data: profiles } = await supabase
-          .from("profiles")
-          .select("email, full_name")
-          .not("email", "is", null);
-        
-        const matchedProfile = profiles?.find(p => 
-          p.full_name?.trim().toLowerCase() === trimmedIdentifier.toLowerCase()
-        );
-        
-        if (matchedProfile?.email) {
-          email = matchedProfile.email;
-        } else {
-          return { error: new Error("اسم المستخدم غير موجود") };
-        }
+        return { error: new Error("اسم المستخدم غير موجود") };
       }
     }
     

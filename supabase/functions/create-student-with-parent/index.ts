@@ -43,8 +43,12 @@ serve(async (req) => {
 
     console.log("Creating student with parent:", { studentName, parentName });
 
+    // Trim names to remove extra spaces
+    const trimmedStudentName = studentName?.trim();
+    const trimmedParentName = parentName?.trim();
+
     // Validate required fields
-    if (!studentName || !parentName || !parentPhone || !centerId) {
+    if (!trimmedStudentName || !trimmedParentName || !parentPhone || !centerId) {
       return new Response(
         JSON.stringify({ error: "يرجى ملء جميع الحقول المطلوبة" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -64,8 +68,8 @@ serve(async (req) => {
       password: parentPassword,
       email_confirm: true,
       user_metadata: {
-        full_name: parentName,
-        username: parentName,
+        full_name: trimmedParentName,
+        username: trimmedParentName,
       },
     });
 
@@ -83,7 +87,7 @@ serve(async (req) => {
     // 2. Create parent profile with email for login lookup
     await supabase.from("profiles").upsert({
       id: parentUserId,
-      full_name: parentName,
+      full_name: trimmedParentName,
       phone: parentPhone,
       email: parentEmail,
     });
@@ -99,7 +103,7 @@ serve(async (req) => {
     const { data: parentData, error: parentError } = await supabase
       .from("parents")
       .insert({
-        full_name: parentName,
+        full_name: trimmedParentName,
         phone: parentPhone,
         work: parentWork || null,
         user_id: parentUserId,
@@ -126,8 +130,8 @@ serve(async (req) => {
       password: studentPassword,
       email_confirm: true,
       user_metadata: {
-        full_name: studentName,
-        username: studentName,
+        full_name: trimmedStudentName,
+        username: trimmedStudentName,
       },
     });
 
@@ -145,7 +149,7 @@ serve(async (req) => {
     // 6. Create student profile with email for login lookup
     await supabase.from("profiles").upsert({
       id: studentUserId,
-      full_name: studentName,
+      full_name: trimmedStudentName,
       phone: studentPhone || null,
       email: studentEmail,
     });
@@ -161,7 +165,7 @@ serve(async (req) => {
     const { data: studentData, error: studentError } = await supabase
       .from("students")
       .insert({
-        full_name: studentName,
+        full_name: trimmedStudentName,
         phone: studentPhone || null,
         birth_date: studentBirthDate || null,
         halqa_id: halqaId || null,
@@ -205,11 +209,11 @@ serve(async (req) => {
         parentUserId,
         credentials: {
           student: {
-            username: studentName,
+            username: trimmedStudentName,
             password: studentPassword,
           },
           parent: {
-            username: parentName,
+            username: trimmedParentName,
             password: parentPassword,
           }
         },
