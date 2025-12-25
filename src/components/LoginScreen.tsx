@@ -22,35 +22,28 @@ interface Props {
 }
 
 export const LoginScreen = ({ onLogin, onBack, centerName, centerId }: Props) => {
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const { signIn, canAccessCenter, isSuperAdmin, setSelectedCenterId } = useAuth();
+  const { signIn, setSelectedCenterId } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!email || !password) {
-      toast.error("يرجى إدخال البريد الإلكتروني وكلمة المرور");
-      return;
-    }
-
-    // Email validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      toast.error("يرجى إدخال بريد إلكتروني صحيح");
+    if (!identifier || !password) {
+      toast.error("يرجى إدخال اسم المستخدم أو البريد الإلكتروني وكلمة المرور");
       return;
     }
 
     setIsLoading(true);
 
     try {
-      const { error } = await signIn(email, password);
+      const { error } = await signIn(identifier, password);
       
       if (error) {
         if (error.message.includes("Invalid login credentials")) {
-          toast.error("البريد الإلكتروني أو كلمة المرور غير صحيحة");
+          toast.error("اسم المستخدم أو كلمة المرور غير صحيحة");
         } else if (error.message.includes("Email not confirmed")) {
           toast.error("يرجى تأكيد البريد الإلكتروني أولاً");
         } else {
@@ -63,9 +56,6 @@ export const LoginScreen = ({ onLogin, onBack, centerName, centerId }: Props) =>
       // Wait a moment for roles to load
       await new Promise((resolve) => setTimeout(resolve, 500));
 
-      // Check access - super_admin can access any center
-      // For other roles, they must have access to the selected center
-      // But since we check after login, we need to verify in the parent component
       setSelectedCenterId(centerId);
       toast.success("تم تسجيل الدخول بنجاح");
       onLogin();
@@ -112,18 +102,18 @@ export const LoginScreen = ({ onLogin, onBack, centerName, centerId }: Props) =>
         {/* Login Form */}
         <Card className="p-6 bg-card/80 backdrop-blur-sm border-border/50 shadow-lg animate-slide-up">
           <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Email Field */}
+            {/* Username/Email Field */}
             <div className="space-y-2">
               <label className="text-sm font-medium text-foreground">
-                البريد الإلكتروني
+                اسم المستخدم أو البريد الإلكتروني
               </label>
               <div className="relative">
                 <User className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                 <Input
-                  type="email"
-                  placeholder="أدخل البريد الإلكتروني"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  type="text"
+                  placeholder="أدخل اسم المستخدم أو البريد الإلكتروني"
+                  value={identifier}
+                  onChange={(e) => setIdentifier(e.target.value)}
                   className="pr-10 h-12 bg-background border-border/50 rounded-xl"
                   dir="ltr"
                 />

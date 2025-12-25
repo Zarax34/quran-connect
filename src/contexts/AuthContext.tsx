@@ -120,7 +120,13 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     return () => subscription.unsubscribe();
   }, []);
 
-  const signIn = async (email: string, password: string) => {
+  const signIn = async (identifier: string, password: string) => {
+    // Check if identifier is an email or username
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const email = emailRegex.test(identifier) 
+      ? identifier 
+      : `${identifier}@app.local`;
+    
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
