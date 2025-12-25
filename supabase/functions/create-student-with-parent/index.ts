@@ -6,11 +6,11 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Generate email from name (remove spaces, add domain)
-function generateEmail(name: string, type: string): string {
-  const cleanName = name.replace(/\s+/g, '.').toLowerCase();
+// Generate email using random ID (no Arabic characters)
+function generateEmail(type: string): string {
+  const randomId = Math.random().toString(36).substring(2, 10);
   const timestamp = Date.now();
-  return `${cleanName}.${type}.${timestamp}@quran-center.local`;
+  return `${type}_${randomId}_${timestamp}@app.local`;
 }
 
 serve(async (req) => {
@@ -56,7 +56,7 @@ serve(async (req) => {
     const studentPassword = studentPhone || parentPhone; // Use parent phone if student has no phone
 
     // 1. Create parent user account
-    const parentEmail = generateEmail(parentName, 'parent');
+    const parentEmail = generateEmail('parent');
     console.log("Creating parent account:", parentEmail);
 
     const { data: parentAuthData, error: parentAuthError } = await supabase.auth.admin.createUser({
@@ -117,7 +117,7 @@ serve(async (req) => {
     console.log("Parent record created:", parentData.id);
 
     // 5. Create student user account
-    const studentEmail = generateEmail(studentName, 'student');
+    const studentEmail = generateEmail('student');
     console.log("Creating student account:", studentEmail);
 
     const { data: studentAuthData, error: studentAuthError } = await supabase.auth.admin.createUser({
