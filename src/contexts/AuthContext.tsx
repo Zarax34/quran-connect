@@ -123,34 +123,38 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const signIn = async (identifier: string, password: string) => {
     // Check if identifier is an email
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    const trimmedIdentifier = identifier.trim();
-    let email = trimmedIdentifier;
     
-    if (!emailRegex.test(trimmedIdentifier)) {
-      // User is logging in with their name - look up email from profiles
-      // Use wildcard pattern for flexible matching
-      const { data: profiles } = await supabase
-        .from("profiles")
-        .select("email, full_name")
-        .not("email", "is", null);
-      
-      // Find profile with matching name (ignoring trailing/leading spaces)
-      const matchedProfile = profiles?.find(p => 
-        p.full_name?.trim() === trimmedIdentifier
-      );
-      
-      if (matchedProfile?.email) {
-        email = matchedProfile.email;
-      } else {
-        return { error: new Error("اسم المستخدم غير موجود") };
-      }
+    if (emailRegex.test(identifier)) {
+      // Direct email login
+      const { error } = await supabase.auth.signInWithPassword({
+        email: identifier,
+        password,
+      });
+      return { error };
     }
     
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    return { error };
+    // Login by name - use edge function to bypass RLS
+    try {
+      const { data, error } = await supabase.functions.invoke('login-by-name', {
+        body: { identifier, password }
+      });
+      
+      if (error || data?.error) {
+        return { error: new Error(data?.error || error?.message || "خطأ في تسجيل الدخول") };
+      }
+      
+      if (data?.session) {
+        // Set the session manually
+        await supabase.auth.setSession({
+          access_token: data.session.access_token,
+          refresh_token: data.session.refresh_token,
+        });
+      }
+      
+      return { error: null };
+    } catch (err) {
+      return { error: err instanceof Error ? err : new Error("خطأ في تسجيل الدخول") };
+    }
   };
 
   const signOut = async () => {
