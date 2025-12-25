@@ -121,11 +121,25 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   }, []);
 
   const signIn = async (identifier: string, password: string) => {
-    // Check if identifier is an email or username
+    // Check if identifier is an email
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    const email = emailRegex.test(identifier) 
-      ? identifier 
-      : `${identifier}@app.local`;
+    let email = identifier;
+    
+    if (!emailRegex.test(identifier)) {
+      // Not an email, look up by name in profiles table
+      const { data: profileData } = await supabase
+        .from("profiles")
+        .select("email")
+        .eq("full_name", identifier.trim())
+        .maybeSingle();
+      
+      if (profileData?.email) {
+        email = profileData.email;
+      } else {
+        // Fallback to old format for backward compatibility
+        email = `${identifier}@app.local`;
+      }
+    }
     
     const { error } = await supabase.auth.signInWithPassword({
       email,
