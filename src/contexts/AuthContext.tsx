@@ -123,21 +123,35 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const signIn = async (identifier: string, password: string) => {
     // Check if identifier is an email
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    let email = identifier;
+    const trimmedIdentifier = identifier.trim();
+    let email = trimmedIdentifier;
     
-    if (!emailRegex.test(identifier)) {
-      // Not an email, look up by name in profiles table
+    if (!emailRegex.test(trimmedIdentifier)) {
+      // User is logging in with their name - look up email from profiles
       const { data: profileData } = await supabase
         .from("profiles")
         .select("email")
-        .eq("full_name", identifier.trim())
+        .ilike("full_name", trimmedIdentifier)
         .maybeSingle();
       
       if (profileData?.email) {
         email = profileData.email;
       } else {
-        // Fallback to old format for backward compatibility
-        email = `${identifier}@app.local`;
+        // Try without exact match - search with trimmed comparison
+        const { data: profiles } = await supabase
+          .from("profiles")
+          .select("email, full_name")
+          .not("email", "is", null);
+        
+        const matchedProfile = profiles?.find(p => 
+          p.full_name?.trim().toLowerCase() === trimmedIdentifier.toLowerCase()
+        );
+        
+        if (matchedProfile?.email) {
+          email = matchedProfile.email;
+        } else {
+          return { error: new Error("اسم المستخدم غير موجود") };
+        }
       }
     }
     
