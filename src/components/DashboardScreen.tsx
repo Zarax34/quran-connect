@@ -29,9 +29,10 @@ import { StudentsManagement } from "./admin/StudentsManagement";
 import { HalaqatManagement } from "./admin/HalaqatManagement";
 import { UsersManagement } from "./admin/UsersManagement";
 import { AnnouncementsManagement } from "./admin/AnnouncementsManagement";
+import { DailyReports } from "./teacher/DailyReports";
 
 type TabType = "home" | "students" | "reports" | "notifications" | "settings";
-type AdminView = "dashboard" | "centers" | "students" | "halaqat" | "users" | "announcements";
+type AdminView = "dashboard" | "centers" | "students" | "halaqat" | "users" | "announcements" | "reports";
 
 interface Stats {
   totalStudents: number;
@@ -126,6 +127,7 @@ export const DashboardScreen = () => {
     { label: "الطلاب", icon: Users, view: "students" as AdminView },
     { label: "المستخدمين", icon: UserCog, view: "users" as AdminView },
     { label: "الإعلانات", icon: Bell, view: "announcements" as AdminView },
+    { label: "التقارير", icon: FileText, view: "reports" as AdminView },
   ];
 
   if (isLoading) {
@@ -154,6 +156,7 @@ export const DashboardScreen = () => {
               {adminView === "halaqat" && "إدارة الحلقات"}
               {adminView === "users" && "إدارة المستخدمين"}
               {adminView === "announcements" && "إدارة الإعلانات"}
+              {adminView === "reports" && "التقارير اليومية"}
             </h1>
           </div>
         </header>
@@ -163,6 +166,7 @@ export const DashboardScreen = () => {
           {adminView === "halaqat" && <HalaqatManagement />}
           {adminView === "users" && <UsersManagement />}
           {adminView === "announcements" && <AnnouncementsManagement />}
+          {adminView === "reports" && <DailyReports />}
         </main>
       </div>
     );
