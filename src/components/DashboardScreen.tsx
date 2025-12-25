@@ -18,7 +18,8 @@ import {
   UserCog,
   ArrowRight,
   CalendarDays,
-  Activity
+  Activity,
+  Home
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -35,6 +36,7 @@ import { ParentsManagement } from "./admin/ParentsManagement";
 import { CoursesManagement } from "./admin/CoursesManagement";
 import { ActivitiesManagement } from "./admin/ActivitiesManagement";
 import { DailyReports } from "./teacher/DailyReports";
+import { ParentDashboard } from "./parent/ParentDashboard";
 
 type TabType = "home" | "students" | "reports" | "notifications" | "settings";
 type AdminView = "dashboard" | "centers" | "students" | "halaqat" | "users" | "announcements" | "parents" | "courses" | "activities" | "reports";
@@ -57,7 +59,7 @@ interface RecentReport {
 export const DashboardScreen = () => {
   const [activeTab, setActiveTab] = useState<TabType>("home");
   const [adminView, setAdminView] = useState<AdminView>("dashboard");
-  const { user, profile, signOut, isSuperAdmin, selectedCenterId } = useAuth();
+  const { user, profile, signOut, isSuperAdmin, selectedCenterId, roles } = useAuth();
   const [stats, setStats] = useState<Stats>({
     totalStudents: 0,
     activeHalaqat: 0,
@@ -66,6 +68,9 @@ export const DashboardScreen = () => {
   });
   const [recentReports, setRecentReports] = useState<RecentReport[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  
+  const isParent = roles.some(r => r.role === "parent");
+  const isAdmin = isSuperAdmin || roles.some(r => r.role === "center_admin");
 
   useEffect(() => {
     fetchDashboardData();
@@ -145,6 +150,50 @@ export const DashboardScreen = () => {
           <Loader2 className="w-10 h-10 text-primary animate-spin mx-auto" />
           <p className="text-muted-foreground mt-4">جاري التحميل...</p>
         </div>
+      </div>
+    );
+  }
+
+  // Render Parent Dashboard if user is a parent and not admin
+  if (isParent && !isAdmin) {
+    return (
+      <div className="min-h-screen bg-background pb-24">
+        <header className="sticky top-0 z-40 bg-primary text-primary-foreground">
+          <div className="px-4 py-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-primary-foreground/80 text-sm">مرحباً بك</p>
+                <h1 className="text-xl font-bold">
+                  {profile?.full_name || user?.email || "ولي الأمر"}
+                </h1>
+                <Badge variant="secondary" className="mt-1 bg-primary-foreground/20 text-primary-foreground">
+                  ولي أمر
+                </Badge>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button 
+                  size="icon" 
+                  variant="ghost" 
+                  className="text-primary-foreground hover:bg-primary-foreground/10 relative"
+                >
+                  <Bell className="w-5 h-5" />
+                </Button>
+                <Button 
+                  size="icon" 
+                  variant="ghost" 
+                  className="text-primary-foreground hover:bg-primary-foreground/10"
+                  onClick={handleSignOut}
+                >
+                  <LogOut className="w-5 h-5" />
+                </Button>
+              </div>
+            </div>
+          </div>
+          <div className="h-6 bg-background rounded-t-3xl" />
+        </header>
+        <main className="px-4 -mt-2">
+          <ParentDashboard />
+        </main>
       </div>
     );
   }
