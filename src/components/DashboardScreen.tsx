@@ -78,7 +78,8 @@ export const DashboardScreen = () => {
   const isStudent = roles.some(r => r.role === "student");
   const isTeacher = roles.some(r => r.role === "teacher");
   const isCommunicationOfficer = roles.some(r => r.role === "communication_officer");
-  const isAdmin = isSuperAdmin || roles.some(r => r.role === "center_admin");
+  const isCenterAdmin = roles.some(r => r.role === "center_admin");
+  const isAdmin = isSuperAdmin || isCenterAdmin;
 
   useEffect(() => {
     fetchDashboardData();
@@ -139,7 +140,8 @@ export const DashboardScreen = () => {
     { label: "نسبة الحضور", value: `${stats.attendanceRate}%`, icon: UserCheck, color: "secondary" },
   ];
 
-  const ADMIN_ACTIONS = [
+  // Center admin has limited actions (no centers or users management)
+  const ADMIN_ACTIONS = isSuperAdmin ? [
     { label: "المراكز", icon: Building2, view: "centers" as AdminView },
     { label: "الحلقات", icon: BookOpen, view: "halaqat" as AdminView },
     { label: "الطلاب", icon: Users, view: "students" as AdminView },
@@ -147,6 +149,17 @@ export const DashboardScreen = () => {
     { label: "أولياء الأمور", icon: UserCheck, view: "parents" as AdminView },
     { label: "حسابات أولياء الأمور", icon: UserCog, view: "parent-accounts" as AdminView },
     { label: "المستخدمين", icon: UserCog, view: "users" as AdminView },
+    { label: "الدورات", icon: GraduationCap, view: "courses" as AdminView },
+    { label: "الأنشطة", icon: Activity, view: "activities" as AdminView },
+    { label: "الإعلانات", icon: Bell, view: "announcements" as AdminView },
+    { label: "التقارير", icon: FileText, view: "reports" as AdminView },
+  ] : [
+    // Center admin actions - limited permissions
+    { label: "الحلقات", icon: BookOpen, view: "halaqat" as AdminView },
+    { label: "الطلاب", icon: Users, view: "students" as AdminView },
+    { label: "حسابات الطلاب", icon: UserCheck, view: "student-accounts" as AdminView },
+    { label: "أولياء الأمور", icon: UserCheck, view: "parents" as AdminView },
+    { label: "حسابات أولياء الأمور", icon: UserCog, view: "parent-accounts" as AdminView },
     { label: "الدورات", icon: GraduationCap, view: "courses" as AdminView },
     { label: "الأنشطة", icon: Activity, view: "activities" as AdminView },
     { label: "الإعلانات", icon: Bell, view: "announcements" as AdminView },
@@ -401,9 +414,13 @@ export const DashboardScreen = () => {
               <h1 className="text-xl font-bold">
                 {profile?.full_name || user?.email || "مسؤول النظام"}
               </h1>
-              {isSuperAdmin && (
+              {isSuperAdmin ? (
                 <Badge variant="secondary" className="mt-1 bg-primary-foreground/20 text-primary-foreground">
                   مسؤول النظام
+                </Badge>
+              ) : isCenterAdmin && (
+                <Badge variant="secondary" className="mt-1 bg-primary-foreground/20 text-primary-foreground">
+                  مسؤول المركز
                 </Badge>
               )}
             </div>
