@@ -464,6 +464,42 @@ export type Database = {
           },
         ]
       }
+      holiday_halaqat: {
+        Row: {
+          created_at: string | null
+          halqa_id: string
+          holiday_id: string
+          id: string
+        }
+        Insert: {
+          created_at?: string | null
+          halqa_id: string
+          holiday_id: string
+          id?: string
+        }
+        Update: {
+          created_at?: string | null
+          halqa_id?: string
+          holiday_id?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "holiday_halaqat_halqa_id_fkey"
+            columns: ["halqa_id"]
+            isOneToOne: false
+            referencedRelation: "halaqat"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "holiday_halaqat_holiday_id_fkey"
+            columns: ["holiday_id"]
+            isOneToOne: false
+            referencedRelation: "holidays"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       holidays: {
         Row: {
           center_id: string | null
@@ -472,6 +508,7 @@ export type Database = {
           id: string
           is_recurring: boolean | null
           name: string
+          reason: string | null
           start_date: string
         }
         Insert: {
@@ -481,6 +518,7 @@ export type Database = {
           id?: string
           is_recurring?: boolean | null
           name: string
+          reason?: string | null
           start_date: string
         }
         Update: {
@@ -490,6 +528,7 @@ export type Database = {
           id?: string
           is_recurring?: boolean | null
           name?: string
+          reason?: string | null
           start_date?: string
         }
         Relationships: [
