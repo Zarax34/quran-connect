@@ -464,6 +464,54 @@ export type Database = {
           },
         ]
       }
+      holiday_attendance: {
+        Row: {
+          attended: boolean | null
+          created_at: string | null
+          holiday_id: string
+          id: string
+          marked_at: string | null
+          marked_by: string | null
+          notes: string | null
+          student_id: string
+        }
+        Insert: {
+          attended?: boolean | null
+          created_at?: string | null
+          holiday_id: string
+          id?: string
+          marked_at?: string | null
+          marked_by?: string | null
+          notes?: string | null
+          student_id: string
+        }
+        Update: {
+          attended?: boolean | null
+          created_at?: string | null
+          holiday_id?: string
+          id?: string
+          marked_at?: string | null
+          marked_by?: string | null
+          notes?: string | null
+          student_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "holiday_attendance_holiday_id_fkey"
+            columns: ["holiday_id"]
+            isOneToOne: false
+            referencedRelation: "holidays"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "holiday_attendance_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       holiday_halaqat: {
         Row: {
           created_at: string | null

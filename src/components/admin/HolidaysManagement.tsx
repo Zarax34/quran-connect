@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Plus, Trash2, Calendar, Loader2 } from "lucide-react";
+import { Plus, Trash2, Calendar, Loader2, Eye, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -19,6 +19,14 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
@@ -41,13 +49,25 @@ interface Holiday {
   halaqat: { id: string; name: string }[];
 }
 
+interface StudentAttendance {
+  id: string;
+  student_id: string;
+  student_name: string;
+  halqa_name: string;
+  attended: boolean;
+  notes: string | null;
+}
+
 export const HolidaysManagement = () => {
-  const { selectedCenterId, isSuperAdmin } = useAuth();
+  const { selectedCenterId, isSuperAdmin, user } = useAuth();
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [halaqat, setHalaqat] = useState<Halqa[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [previewHoliday, setPreviewHoliday] = useState<Holiday | null>(null);
+  const [attendanceData, setAttendanceData] = useState<StudentAttendance[]>([]);
+  const [isLoadingAttendance, setIsLoadingAttendance] = useState(false);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -126,6 +146,88 @@ export const HolidaysManagement = () => {
     }
   };
 
+  const fetchAttendanceData = async (holiday: Holiday) => {
+    setIsLoadingAttendance(true);
+    setPreviewHoliday(holiday);
+    try {
+      // Get halqa IDs for this holiday
+      const halqaIds = holiday.halaqat.map((h) => h.id);
+
+      // Fetch students in these halaqat
+      const { data: studentsData, error: studentsError } = await supabase
+        .from("students")
+        .select("id, full_name, halqa_id")
+        .in("halqa_id", halqaIds)
+        .eq("is_active", true);
+
+      if (studentsError) throw studentsError;
+
+      // Fetch attendance records for this holiday
+      const { data: attendanceRecords, error: attendanceError } = await supabase
+        .from("holiday_attendance")
+        .select("*")
+        .eq("holiday_id", holiday.id);
+
+      if (attendanceError) throw attendanceError;
+
+      // Map students with their attendance status
+      const attendanceList: StudentAttendance[] = (studentsData || []).map((student) => {
+        const halqa = holiday.halaqat.find((h) => h.id === student.halqa_id);
+        const attendanceRecord = attendanceRecords?.find(
+          (a) => a.student_id === student.id
+        );
+
+        return {
+          id: attendanceRecord?.id || student.id,
+          student_id: student.id,
+          student_name: student.full_name,
+          halqa_name: halqa?.name || "",
+          attended: attendanceRecord?.attended || false,
+          notes: attendanceRecord?.notes || null,
+        };
+      });
+
+      setAttendanceData(attendanceList);
+    } catch (error) {
+      console.error("Error fetching attendance:", error);
+      toast.error("حدث خطأ أثناء جلب بيانات الحضور");
+    } finally {
+      setIsLoadingAttendance(false);
+    }
+  };
+
+  const toggleAttendance = async (studentId: string, attended: boolean) => {
+    if (!previewHoliday) return;
+
+    try {
+      const { error } = await supabase
+        .from("holiday_attendance")
+        .upsert({
+          holiday_id: previewHoliday.id,
+          student_id: studentId,
+          attended: attended,
+          marked_at: new Date().toISOString(),
+          marked_by: user?.id,
+        }, {
+          onConflict: 'holiday_id,student_id'
+        });
+
+      if (error) throw error;
+
+      // Update local state
+      setAttendanceData((prev) =>
+        prev.map((item) =>
+          item.student_id === studentId ? { ...item, attended } : item
+        )
+      );
+
+      toast.success(attended ? "تم تسجيل الحضور" : "تم إلغاء الحضور");
+    } catch (error) {
+      console.error("Error updating attendance:", error);
+      toast.error("حدث خطأ أثناء تحديث الحضور");
+    }
+  };
+
   const handleSubmit = async () => {
     if (!formData.name || !formData.startDate) {
       toast.error("يرجى ملء جميع الحقول المطلوبة");
@@ -170,7 +272,7 @@ export const HolidaysManagement = () => {
 
       if (hhError) throw hhError;
 
-      toast.success("تمت إضافة العطلة بنجاح");
+      toast.success("تمت إضافة العطلة بنجاح وتم إرسال الإشعارات للطلاب وأولياء الأمور");
       setIsDialogOpen(false);
       resetForm();
       fetchData();
@@ -225,6 +327,9 @@ export const HolidaysManagement = () => {
       selectedHalaqat: halaqat.map((h) => h.id),
     }));
   };
+
+  const attendedCount = attendanceData.filter((a) => a.attended).length;
+  const notAttendedCount = attendanceData.length - attendedCount;
 
   if (isLoading) {
     return (
@@ -421,6 +526,84 @@ export const HolidaysManagement = () => {
         </Dialog>
       </div>
 
+      {/* Preview Dialog */}
+      <Dialog open={!!previewHoliday} onOpenChange={(open) => !open && setPreviewHoliday(null)}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>معاينة الطلاب - {previewHoliday?.name}</DialogTitle>
+          </DialogHeader>
+          
+          {isLoadingAttendance ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="w-8 h-8 text-primary animate-spin" />
+            </div>
+          ) : (
+            <div className="space-y-4 mt-4">
+              {/* Summary */}
+              <div className="flex gap-4 justify-center">
+                <div className="bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-4 py-2 rounded-lg text-center">
+                  <div className="text-2xl font-bold">{attendedCount}</div>
+                  <div className="text-sm">حضروا</div>
+                </div>
+                <div className="bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 px-4 py-2 rounded-lg text-center">
+                  <div className="text-2xl font-bold">{notAttendedCount}</div>
+                  <div className="text-sm">لم يحضروا</div>
+                </div>
+              </div>
+
+              {attendanceData.length === 0 ? (
+                <p className="text-center text-muted-foreground py-4">
+                  لا يوجد طلاب في الحلقات المحددة
+                </p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="text-right">اسم الطالب</TableHead>
+                      <TableHead className="text-right">الحلقة</TableHead>
+                      <TableHead className="text-center">الحالة</TableHead>
+                      <TableHead className="text-center">تسجيل الحضور</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {attendanceData.map((student) => (
+                      <TableRow key={student.student_id}>
+                        <TableCell className="font-medium">
+                          {student.student_name}
+                        </TableCell>
+                        <TableCell>{student.halqa_name}</TableCell>
+                        <TableCell className="text-center">
+                          {student.attended ? (
+                            <span className="inline-flex items-center gap-1 text-green-600">
+                              <Check className="w-4 h-4" />
+                              حضر
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-red-600">
+                              <X className="w-4 h-4" />
+                              لم يحضر
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <Button
+                            size="sm"
+                            variant={student.attended ? "destructive" : "default"}
+                            onClick={() => toggleAttendance(student.student_id, !student.attended)}
+                          >
+                            {student.attended ? "إلغاء الحضور" : "تسجيل حضور"}
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       {holidays.length === 0 ? (
         <Card className="p-8 text-center">
           <Calendar className="w-12 h-12 mx-auto text-muted-foreground/50" />
@@ -431,7 +614,7 @@ export const HolidaysManagement = () => {
           {holidays.map((holiday) => (
             <Card key={holiday.id} className="p-4">
               <div className="flex items-start justify-between">
-                <div className="space-y-1">
+                <div className="space-y-1 flex-1">
                   <h3 className="font-medium text-foreground">{holiday.name}</h3>
                   <p className="text-sm text-muted-foreground">
                     {holiday.start_date === holiday.end_date
@@ -462,14 +645,24 @@ export const HolidaysManagement = () => {
                     </div>
                   )}
                 </div>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="text-destructive hover:text-destructive"
-                  onClick={() => handleDelete(holiday.id)}
-                >
-                  <Trash2 className="w-4 h-4" />
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="text-primary hover:text-primary"
+                    onClick={() => fetchAttendanceData(holiday)}
+                  >
+                    <Eye className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="text-destructive hover:text-destructive"
+                    onClick={() => handleDelete(holiday.id)}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
               </div>
             </Card>
           ))}
