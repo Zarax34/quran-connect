@@ -3,7 +3,10 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Search, Loader2, UserCog, Power } from "lucide-react";
+import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Search, Loader2, UserCog, Power, Plus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
@@ -34,6 +37,14 @@ export const StaffAccountsList = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [togglingUserId, setTogglingUserId] = useState<string | null>(null);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formData, setFormData] = useState({
+    fullName: "",
+    username: "",
+    password: "",
+    role: "teacher" as "teacher" | "communication_officer",
+  });
 
   useEffect(() => {
     fetchStaff();
@@ -78,7 +89,6 @@ export const StaffAccountsList = () => {
 
       if (profilesError) throw profilesError;
 
-      // Check user status using edge function
       const staffList: StaffAccount[] = [];
       
       for (const role of rolesData) {
@@ -91,7 +101,7 @@ export const StaffAccountsList = () => {
             email: profile.email,
             role: role.role as 'teacher' | 'communication_officer',
             center_name: (role.centers as any)?.name || null,
-            is_active: true, // Default to true, we'll check status separately
+            is_active: true,
           });
         }
       }
@@ -103,6 +113,56 @@ export const StaffAccountsList = () => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!formData.fullName.trim() || !formData.username.trim() || !formData.password.trim()) {
+      toast.error("يرجى ملء جميع الحقول المطلوبة");
+      return;
+    }
+
+    if (formData.password.length < 6) {
+      toast.error("كلمة المرور يجب أن تكون 6 أحرف على الأقل");
+      return;
+    }
+
+    if (!selectedCenterId) {
+      toast.error("يرجى اختيار مركز أولاً");
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      
+      const { data, error } = await supabase.functions.invoke("create-user", {
+        body: {
+          username: formData.username.trim(),
+          password: formData.password,
+          fullName: formData.fullName.trim(),
+          role: formData.role,
+          centerId: selectedCenterId,
+        },
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      toast.success("تم إنشاء الحساب بنجاح");
+      setIsDialogOpen(false);
+      setFormData({ fullName: "", username: "", password: "", role: "teacher" });
+      fetchStaff();
+    } catch (error: any) {
+      console.error("Error creating staff:", error);
+      toast.error(error.message || "حدث خطأ في إنشاء الحساب");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const resetForm = () => {
+    setFormData({ fullName: "", username: "", password: "", role: "teacher" });
   };
 
   const toggleUserStatus = async (userId: string, currentStatus: boolean) => {
@@ -147,14 +207,95 @@ export const StaffAccountsList = () => {
 
   return (
     <div className="space-y-4">
-      <div className="relative">
-        <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-        <Input
-          placeholder="البحث عن موظف..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="pr-10"
-        />
+      <div className="flex items-center justify-between gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+          <Input
+            placeholder="البحث عن موظف..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pr-10"
+          />
+        </div>
+        
+        <Dialog open={isDialogOpen} onOpenChange={(open) => { setIsDialogOpen(open); if (!open) resetForm(); }}>
+          <DialogTrigger asChild>
+            <Button className="gap-2">
+              <Plus className="w-4 h-4" />
+              إضافة موظف
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>إضافة معلم أو مسؤول تواصل</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="fullName">الاسم الكامل *</Label>
+                <Input
+                  id="fullName"
+                  value={formData.fullName}
+                  onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
+                  placeholder="أدخل الاسم الكامل"
+                  required
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="username">اسم المستخدم *</Label>
+                <Input
+                  id="username"
+                  value={formData.username}
+                  onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                  placeholder="أدخل اسم المستخدم"
+                  required
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="password">كلمة المرور *</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  value={formData.password}
+                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  placeholder="أدخل كلمة المرور (6 أحرف على الأقل)"
+                  required
+                  minLength={6}
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="role">الدور *</Label>
+                <Select
+                  value={formData.role}
+                  onValueChange={(value: "teacher" | "communication_officer") => 
+                    setFormData({ ...formData, role: value })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="اختر الدور" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="teacher">معلم</SelectItem>
+                    <SelectItem value="communication_officer">مسؤول تواصل</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <Button type="submit" className="w-full" disabled={isSubmitting}>
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin ml-2" />
+                    جاري الإنشاء...
+                  </>
+                ) : (
+                  "إنشاء الحساب"
+                )}
+              </Button>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
 
       {filteredStaff.length === 0 ? (
