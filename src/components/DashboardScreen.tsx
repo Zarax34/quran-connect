@@ -38,9 +38,10 @@ import { ActivitiesManagement } from "./admin/ActivitiesManagement";
 import { DailyReports } from "./teacher/DailyReports";
 import { ParentDashboard } from "./parent/ParentDashboard";
 import { StudentDashboard } from "./student/StudentDashboard";
+import { StudentAccountsList } from "./admin/StudentAccountsList";
 
 type TabType = "home" | "students" | "reports" | "notifications" | "settings";
-type AdminView = "dashboard" | "centers" | "students" | "halaqat" | "users" | "announcements" | "parents" | "courses" | "activities" | "reports";
+type AdminView = "dashboard" | "centers" | "students" | "halaqat" | "users" | "announcements" | "parents" | "courses" | "activities" | "reports" | "student-accounts";
 
 interface Stats {
   totalStudents: number;
@@ -137,6 +138,7 @@ export const DashboardScreen = () => {
     { label: "المراكز", icon: Building2, view: "centers" as AdminView },
     { label: "الحلقات", icon: BookOpen, view: "halaqat" as AdminView },
     { label: "الطلاب", icon: Users, view: "students" as AdminView },
+    { label: "حسابات الطلاب", icon: UserCheck, view: "student-accounts" as AdminView },
     { label: "المستخدمين", icon: UserCog, view: "users" as AdminView },
     { label: "أولياء الأمور", icon: UserCheck, view: "parents" as AdminView },
     { label: "الدورات", icon: GraduationCap, view: "courses" as AdminView },
@@ -263,6 +265,7 @@ export const DashboardScreen = () => {
               {adminView === "courses" && "إدارة الدورات"}
               {adminView === "activities" && "إدارة الأنشطة"}
               {adminView === "reports" && "التقارير اليومية"}
+              {adminView === "student-accounts" && "حسابات الطلاب"}
             </h1>
           </div>
         </header>
@@ -276,6 +279,7 @@ export const DashboardScreen = () => {
           {adminView === "courses" && <CoursesManagement />}
           {adminView === "activities" && <ActivitiesManagement />}
           {adminView === "reports" && <DailyReports />}
+          {adminView === "student-accounts" && <StudentAccountsList />}
         </main>
       </div>
     );
