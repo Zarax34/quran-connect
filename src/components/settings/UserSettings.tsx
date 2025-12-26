@@ -1,30 +1,64 @@
-import { useState } from "react";
-import { User, Lock, Sun, Moon, Loader2, Save, Eye, EyeOff } from "lucide-react";
+import { useState, useEffect } from "react";
+import { User, Lock, Sun, Moon, Loader2, Save, Eye, EyeOff, Fingerprint, Bell, Trash2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
+import { useCredentialsStorage } from "@/hooks/useCredentialsStorage";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 export const UserSettings = () => {
   const { profile, user } = useAuth();
   const { theme, toggleTheme } = useTheme();
+  const { 
+    isBiometricEnabled, 
+    toggleBiometric, 
+    clearCredentials, 
+    hasStoredCredentials,
+    isBiometricAvailable 
+  } = useCredentialsStorage();
+  const { registerForPushNotifications } = usePushNotifications(user?.id);
   
   const [fullName, setFullName] = useState(profile?.full_name || "");
   const [isUpdatingName, setIsUpdatingName] = useState(false);
   
-  const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
-  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  
+  const [biometricAvailable, setBiometricAvailable] = useState(false);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+
+  useEffect(() => {
+    const checkBiometric = async () => {
+      const available = await isBiometricAvailable();
+      setBiometricAvailable(available);
+    };
+    checkBiometric();
+
+    // Check notification permission
+    if ('Notification' in window) {
+      setNotificationsEnabled(Notification.permission === 'granted');
+    }
+  }, [isBiometricAvailable]);
 
   const handleUpdateName = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -86,7 +120,6 @@ export const UserSettings = () => {
       if (error) throw error;
 
       toast.success("تم تحديث كلمة المرور بنجاح");
-      setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
     } catch (error: any) {
@@ -95,6 +128,40 @@ export const UserSettings = () => {
     } finally {
       setIsUpdatingPassword(false);
     }
+  };
+
+  const handleToggleBiometric = (enabled: boolean) => {
+    if (!hasStoredCredentials && enabled) {
+      toast.error("يجب تسجيل الدخول أولاً لتفعيل البصمة");
+      return;
+    }
+    
+    const success = toggleBiometric(enabled);
+    if (success) {
+      toast.success(enabled ? "تم تفعيل الدخول بالبصمة" : "تم إلغاء الدخول بالبصمة");
+    } else {
+      toast.error("حدث خطأ في تغيير إعدادات البصمة");
+    }
+  };
+
+  const handleToggleNotifications = async (enabled: boolean) => {
+    if (enabled) {
+      const granted = await registerForPushNotifications();
+      setNotificationsEnabled(granted);
+      if (granted) {
+        toast.success("تم تفعيل الإشعارات");
+      } else {
+        toast.error("لم يتم منح إذن الإشعارات");
+      }
+    } else {
+      setNotificationsEnabled(false);
+      toast.success("تم إلغاء الإشعارات");
+    }
+  };
+
+  const handleClearCredentials = () => {
+    clearCredentials();
+    toast.success("تم حذف بيانات الدخول المحفوظة");
   };
 
   return (
@@ -120,6 +187,78 @@ export const UserSettings = () => {
           <Switch
             checked={theme === "dark"}
             onCheckedChange={toggleTheme}
+          />
+        </div>
+      </Card>
+
+      {/* Biometric & Security Settings */}
+      <Card className="p-6">
+        <div className="flex items-center gap-3 mb-4">
+          <Fingerprint className="w-5 h-5 text-primary" />
+          <h3 className="text-lg font-semibold text-foreground">تسجيل الدخول السريع</h3>
+        </div>
+        
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="space-y-1">
+              <Label className="text-foreground">الدخول بالبصمة</Label>
+              <p className="text-sm text-muted-foreground">
+                {biometricAvailable 
+                  ? "استخدم بصمة الإصبع لتسجيل الدخول السريع"
+                  : "البصمة غير متوفرة على هذا الجهاز"}
+              </p>
+            </div>
+            <Switch
+              checked={isBiometricEnabled}
+              onCheckedChange={handleToggleBiometric}
+              disabled={!biometricAvailable || !hasStoredCredentials}
+            />
+          </div>
+
+          {hasStoredCredentials && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="outline" className="w-full gap-2 text-destructive hover:text-destructive">
+                  <Trash2 className="w-4 h-4" />
+                  حذف بيانات الدخول المحفوظة
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>حذف بيانات الدخول</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    هل أنت متأكد من حذف بيانات الدخول المحفوظة؟ سيتعين عليك إدخال البيانات يدوياً في المرة القادمة.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>إلغاء</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleClearCredentials}>
+                    حذف
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
+        </div>
+      </Card>
+
+      {/* Notification Settings */}
+      <Card className="p-6">
+        <div className="flex items-center gap-3 mb-4">
+          <Bell className="w-5 h-5 text-primary" />
+          <h3 className="text-lg font-semibold text-foreground">الإشعارات</h3>
+        </div>
+        
+        <div className="flex items-center justify-between">
+          <div className="space-y-1">
+            <Label className="text-foreground">إشعارات التطبيق</Label>
+            <p className="text-sm text-muted-foreground">
+              استلام الإشعارات حتى عند إغلاق التطبيق
+            </p>
+          </div>
+          <Switch
+            checked={notificationsEnabled}
+            onCheckedChange={handleToggleNotifications}
           />
         </div>
       </Card>

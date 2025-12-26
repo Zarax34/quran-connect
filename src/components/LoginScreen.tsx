@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { 
   ArrowRight, 
   User, 
@@ -6,13 +6,16 @@ import {
   Eye, 
   EyeOff, 
   BookOpen,
-  Fingerprint
+  Fingerprint,
+  Loader2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
+import { useCredentialsStorage } from "@/hooks/useCredentialsStorage";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
 
 interface Props {
   onLogin: () => void;
@@ -26,7 +29,40 @@ export const LoginScreen = ({ onLogin, onBack, centerName, centerId }: Props) =>
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const { signIn, setSelectedCenterId } = useAuth();
+  const [isBiometricLoading, setIsBiometricLoading] = useState(false);
+  const { signIn, setSelectedCenterId, user } = useAuth();
+  const { 
+    storedCredentials, 
+    saveCredentials, 
+    authenticateWithBiometric,
+    isBiometricEnabled,
+    hasStoredCredentials
+  } = useCredentialsStorage();
+  const { registerForPushNotifications } = usePushNotifications(user?.id);
+
+  // Check for stored credentials on mount
+  useEffect(() => {
+    if (storedCredentials && storedCredentials.centerId === centerId) {
+      setIdentifier(storedCredentials.identifier);
+    }
+  }, [storedCredentials, centerId]);
+
+  const handleSuccessfulLogin = async () => {
+    // Save credentials for future logins
+    saveCredentials({
+      identifier,
+      password,
+      centerId,
+      centerName
+    });
+
+    // Register for push notifications
+    await registerForPushNotifications();
+
+    setSelectedCenterId(centerId);
+    toast.success("تم تسجيل الدخول بنجاح");
+    onLogin();
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,16 +91,63 @@ export const LoginScreen = ({ onLogin, onBack, centerName, centerId }: Props) =>
 
       // Wait a moment for roles to load
       await new Promise((resolve) => setTimeout(resolve, 500));
-
-      setSelectedCenterId(centerId);
-      toast.success("تم تسجيل الدخول بنجاح");
-      onLogin();
+      await handleSuccessfulLogin();
     } catch (error) {
       toast.error("حدث خطأ غير متوقع");
     } finally {
       setIsLoading(false);
     }
   };
+
+  const handleBiometricLogin = async () => {
+    if (!storedCredentials || storedCredentials.centerId !== centerId) {
+      toast.error("لم يتم العثور على بيانات الدخول المحفوظة لهذا المركز");
+      return;
+    }
+
+    if (!isBiometricEnabled) {
+      toast.error("البصمة غير مفعلة. يرجى تفعيلها من الإعدادات بعد تسجيل الدخول");
+      return;
+    }
+
+    setIsBiometricLoading(true);
+
+    try {
+      const authenticated = await authenticateWithBiometric();
+      
+      if (!authenticated) {
+        toast.error("فشل التحقق من البصمة");
+        setIsBiometricLoading(false);
+        return;
+      }
+
+      // Login with stored credentials
+      const { error } = await signIn(
+        storedCredentials.identifier, 
+        storedCredentials.password
+      );
+      
+      if (error) {
+        toast.error("فشل تسجيل الدخول. يرجى تسجيل الدخول يدوياً");
+        setIsBiometricLoading(false);
+        return;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      setSelectedCenterId(centerId);
+      await registerForPushNotifications();
+      toast.success("تم تسجيل الدخول بنجاح");
+      onLogin();
+    } catch (error) {
+      toast.error("حدث خطأ غير متوقع");
+    } finally {
+      setIsBiometricLoading(false);
+    }
+  };
+
+  const canUseBiometric = hasStoredCredentials && 
+    storedCredentials?.centerId === centerId && 
+    isBiometricEnabled;
 
   return (
     <div className="min-h-screen bg-background islamic-pattern relative overflow-hidden">
@@ -157,7 +240,7 @@ export const LoginScreen = ({ onLogin, onBack, centerName, centerId }: Props) =>
             >
               {isLoading ? (
                 <div className="flex items-center gap-2">
-                  <div className="w-5 h-5 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
+                  <Loader2 className="w-5 h-5 animate-spin" />
                   <span>جاري التسجيل...</span>
                 </div>
               ) : (
@@ -179,11 +262,23 @@ export const LoginScreen = ({ onLogin, onBack, centerName, centerId }: Props) =>
             <Button
               type="button"
               variant="outline"
+              disabled={isBiometricLoading || !canUseBiometric}
+              onClick={handleBiometricLogin}
               className="w-full h-12 rounded-xl border-border/50 hover:bg-accent/50"
             >
-              <Fingerprint className="w-5 h-5 ml-2" />
+              {isBiometricLoading ? (
+                <Loader2 className="w-5 h-5 animate-spin ml-2" />
+              ) : (
+                <Fingerprint className="w-5 h-5 ml-2" />
+              )}
               الدخول بالبصمة
             </Button>
+
+            {!canUseBiometric && hasStoredCredentials && storedCredentials?.centerId === centerId && (
+              <p className="text-xs text-center text-muted-foreground">
+                لتفعيل الدخول بالبصمة، سجل الدخول ثم فعّلها من الإعدادات
+              </p>
+            )}
           </form>
         </Card>
 
