@@ -20,7 +20,8 @@ import {
   GraduationCap,
   AlertCircle,
   Loader2,
-  ArrowRight
+  CalendarDays,
+  MapPin
 } from "lucide-react";
 
 interface Student {
@@ -73,23 +74,37 @@ interface ActivityApproval {
   student?: { full_name: string };
 }
 
+interface ChildActivity {
+  activity: Activity;
+  student: { id: string; full_name: string };
+  approval?: ActivityApproval;
+}
+
 export const ParentDashboard = () => {
   const { user } = useAuth();
   const [children, setChildren] = useState<Student[]>([]);
   const [selectedChild, setSelectedChild] = useState<Student | null>(null);
   const [reports, setReports] = useState<Report[]>([]);
   const [pendingApprovals, setPendingApprovals] = useState<ActivityApproval[]>([]);
+  const [childActivities, setChildActivities] = useState<ChildActivity[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [approvalDialog, setApprovalDialog] = useState<ActivityApproval | null>(null);
   const [approvalNotes, setApprovalNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [parentId, setParentId] = useState<string | null>(null);
 
   useEffect(() => {
     if (user) {
       fetchChildren();
-      fetchPendingApprovals();
     }
   }, [user]);
+
+  useEffect(() => {
+    if (parentId && children.length > 0) {
+      fetchPendingApprovals();
+      fetchChildActivities();
+    }
+  }, [parentId, children]);
 
   useEffect(() => {
     if (selectedChild) {
@@ -111,6 +126,8 @@ export const ParentDashboard = () => {
         setIsLoading(false);
         return;
       }
+
+      setParentId(parentData.id);
 
       // Get students linked to this parent
       const { data: studentParents, error: spError } = await supabase
@@ -210,16 +227,9 @@ export const ParentDashboard = () => {
   };
 
   const fetchPendingApprovals = async () => {
+    if (!parentId) return;
+    
     try {
-      // Get parent record
-      const { data: parentData, error: parentError } = await supabase
-        .from("parents")
-        .select("id")
-        .eq("user_id", user?.id)
-        .single();
-
-      if (parentError || !parentData) return;
-
       // Get pending approvals
       const { data, error } = await supabase
         .from("activity_approvals")
@@ -228,7 +238,7 @@ export const ParentDashboard = () => {
           activities (*),
           students (full_name)
         `)
-        .eq("parent_id", parentData.id)
+        .eq("parent_id", parentId)
         .is("approved", null);
 
       if (error) throw error;
@@ -240,6 +250,55 @@ export const ParentDashboard = () => {
       })) || []);
     } catch (error) {
       console.error("Error fetching approvals:", error);
+    }
+  };
+
+  const fetchChildActivities = async () => {
+    if (!parentId || children.length === 0) return;
+
+    try {
+      const childIds = children.map(c => c.id);
+
+      // Get all activities for children's centers
+      const { data: activitiesData, error: activitiesError } = await supabase
+        .from("activities")
+        .select("*")
+        .eq("is_active", true)
+        .gte("end_date", new Date().toISOString().split('T')[0]);
+
+      if (activitiesError) throw activitiesError;
+
+      // Get all approvals for these children
+      const { data: approvalsData, error: approvalsError } = await supabase
+        .from("activity_approvals")
+        .select(`
+          *,
+          activities (*),
+          students (id, full_name)
+        `)
+        .eq("parent_id", parentId)
+        .in("student_id", childIds);
+
+      if (approvalsError) throw approvalsError;
+
+      // Map activities with their approvals per child
+      const activitiesList: ChildActivity[] = [];
+      
+      approvalsData?.forEach((approval: any) => {
+        activitiesList.push({
+          activity: approval.activities,
+          student: { id: approval.student_id, full_name: approval.students.full_name },
+          approval: {
+            ...approval,
+            activity: approval.activities,
+            student: approval.students
+          }
+        });
+      });
+
+      setChildActivities(activitiesList);
+    } catch (error) {
+      console.error("Error fetching child activities:", error);
     }
   };
 
@@ -263,6 +322,33 @@ export const ParentDashboard = () => {
       setApprovalDialog(null);
       setApprovalNotes("");
       fetchPendingApprovals();
+      fetchChildActivities();
+    } catch (error) {
+      console.error("Error updating approval:", error);
+      toast.error("حدث خطأ في تحديث الموافقة");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleActivityApproval = async (activity: ChildActivity, approved: boolean) => {
+    if (!activity.approval) return;
+
+    setIsSubmitting(true);
+    try {
+      const { error } = await supabase
+        .from("activity_approvals")
+        .update({
+          approved,
+          response_date: new Date().toISOString()
+        })
+        .eq("id", activity.approval.id);
+
+      if (error) throw error;
+
+      toast.success(approved ? "تمت الموافقة بنجاح" : "تم رفض الطلب");
+      fetchPendingApprovals();
+      fetchChildActivities();
     } catch (error) {
       console.error("Error updating approval:", error);
       toast.error("حدث خطأ في تحديث الموافقة");
@@ -289,6 +375,17 @@ export const ParentDashboard = () => {
       talqeen: "تلقين"
     };
     return labels[type] || type;
+  };
+
+  const getApprovalStatus = (approval: ActivityApproval | undefined) => {
+    if (!approval) return null;
+    if (approval.approved === null) {
+      return { text: "في انتظار الرد", variant: "outline" as const, icon: Clock };
+    }
+    if (approval.approved) {
+      return { text: "تمت الموافقة", variant: "default" as const, icon: CheckCircle };
+    }
+    return { text: "مرفوض", variant: "destructive" as const, icon: XCircle };
   };
 
   if (isLoading) {
@@ -326,7 +423,7 @@ export const ParentDashboard = () => {
             <AlertCircle className="w-5 h-5 text-warning" />
             <div className="flex-1">
               <p className="font-medium">لديك {pendingApprovals.length} طلبات موافقة معلقة</p>
-              <p className="text-sm text-muted-foreground">انتقل إلى تبويب الموافقات للرد عليها</p>
+              <p className="text-sm text-muted-foreground">انتقل إلى تبويب الأنشطة للرد عليها</p>
             </div>
           </div>
         </Card>
@@ -374,22 +471,102 @@ export const ParentDashboard = () => {
       )}
 
       {/* Tabs */}
-      <Tabs defaultValue="reports" className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="reports" className="gap-2">
-            <FileText className="w-4 h-4" />
-            التقارير
-          </TabsTrigger>
-          <TabsTrigger value="approvals" className="gap-2 relative">
-            <CheckCircle className="w-4 h-4" />
-            الموافقات
+      <Tabs defaultValue="activities" className="w-full">
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="activities" className="gap-2 relative">
+            <CalendarDays className="w-4 h-4" />
+            الأنشطة
             {pendingApprovals.length > 0 && (
               <Badge variant="destructive" className="absolute -top-1 -left-1 h-5 w-5 p-0 text-xs flex items-center justify-center">
                 {pendingApprovals.length}
               </Badge>
             )}
           </TabsTrigger>
+          <TabsTrigger value="reports" className="gap-2">
+            <FileText className="w-4 h-4" />
+            التقارير
+          </TabsTrigger>
+          <TabsTrigger value="approvals" className="gap-2">
+            <CheckCircle className="w-4 h-4" />
+            سجل الموافقات
+          </TabsTrigger>
         </TabsList>
+
+        {/* Activities Tab */}
+        <TabsContent value="activities" className="space-y-4">
+          {childActivities.length === 0 ? (
+            <Card className="p-6 text-center">
+              <CalendarDays className="w-10 h-10 mx-auto text-muted-foreground mb-3" />
+              <p className="text-muted-foreground">لا توجد أنشطة مسجلة لأبنائك حالياً</p>
+            </Card>
+          ) : (
+            childActivities.map((item, index) => {
+              const status = getApprovalStatus(item.approval);
+              const isPending = item.approval?.approved === null;
+              
+              return (
+                <Card key={`${item.activity.id}-${item.student.id}-${index}`} className="p-4 space-y-3">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h4 className="font-semibold text-foreground">{item.activity.name}</h4>
+                      <p className="text-sm text-muted-foreground">
+                        للطالب: {item.student.full_name}
+                      </p>
+                    </div>
+                    {status && (
+                      <Badge variant={status.variant} className="gap-1">
+                        <status.icon className="w-3 h-3" />
+                        {status.text}
+                      </Badge>
+                    )}
+                  </div>
+
+                  {item.activity.description && (
+                    <p className="text-sm text-muted-foreground">{item.activity.description}</p>
+                  )}
+
+                  <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                    <span className="flex items-center gap-1">
+                      <Calendar className="w-4 h-4" />
+                      {new Date(item.activity.start_date).toLocaleDateString("ar-SA")}
+                      {item.activity.end_date && item.activity.end_date !== item.activity.start_date && (
+                        <> - {new Date(item.activity.end_date).toLocaleDateString("ar-SA")}</>
+                      )}
+                    </span>
+                    {item.activity.location && (
+                      <span className="flex items-center gap-1">
+                        <MapPin className="w-4 h-4" />
+                        {item.activity.location}
+                      </span>
+                    )}
+                  </div>
+
+                  {isPending && item.activity.requires_approval && (
+                    <div className="flex gap-2 pt-2 border-t">
+                      <Button
+                        className="flex-1 gap-2"
+                        onClick={() => handleActivityApproval(item, true)}
+                        disabled={isSubmitting}
+                      >
+                        <CheckCircle className="w-4 h-4" />
+                        موافقة
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="flex-1 gap-2"
+                        onClick={() => handleActivityApproval(item, false)}
+                        disabled={isSubmitting}
+                      >
+                        <XCircle className="w-4 h-4" />
+                        رفض
+                      </Button>
+                    </div>
+                  )}
+                </Card>
+              );
+            })
+          )}
+        </TabsContent>
 
         {/* Reports Tab */}
         <TabsContent value="reports" className="space-y-4">
@@ -462,65 +639,43 @@ export const ParentDashboard = () => {
           )}
         </TabsContent>
 
-        {/* Approvals Tab */}
+        {/* Approvals History Tab */}
         <TabsContent value="approvals" className="space-y-4">
-          {pendingApprovals.length === 0 ? (
+          {childActivities.filter(a => a.approval?.approved !== null).length === 0 ? (
             <Card className="p-6 text-center">
               <CheckCircle className="w-10 h-10 mx-auto text-muted-foreground mb-3" />
-              <p className="text-muted-foreground">لا توجد طلبات موافقة معلقة</p>
+              <p className="text-muted-foreground">لا يوجد سجل موافقات سابقة</p>
             </Card>
           ) : (
-            pendingApprovals.map((approval) => (
-              <Card key={approval.id} className="p-4 space-y-3">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <h4 className="font-semibold">{approval.activity?.name}</h4>
-                    <p className="text-sm text-muted-foreground">
-                      للطالب: {approval.student?.full_name}
-                    </p>
-                  </div>
-                  <Badge variant="outline" className="gap-1">
-                    <Clock className="w-3 h-3" />
-                    في انتظار الرد
-                  </Badge>
-                </div>
-
-                {approval.activity?.description && (
-                  <p className="text-sm">{approval.activity.description}</p>
-                )}
-
-                <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                  <span className="flex items-center gap-1">
-                    <Calendar className="w-4 h-4" />
-                    {new Date(approval.activity?.start_date || "").toLocaleDateString("ar-SA")}
-                  </span>
-                  {approval.activity?.location && (
-                    <span>📍 {approval.activity.location}</span>
-                  )}
-                </div>
-
-                <div className="flex gap-2 pt-2">
-                  <Button
-                    className="flex-1 gap-2"
-                    onClick={() => setApprovalDialog(approval)}
-                  >
-                    <CheckCircle className="w-4 h-4" />
-                    موافقة
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="flex-1 gap-2"
-                    onClick={() => {
-                      setApprovalDialog(approval);
-                      setApprovalNotes("");
-                    }}
-                  >
-                    <XCircle className="w-4 h-4" />
-                    رفض
-                  </Button>
-                </div>
-              </Card>
-            ))
+            childActivities
+              .filter(a => a.approval?.approved !== null)
+              .map((item, index) => {
+                const status = getApprovalStatus(item.approval);
+                
+                return (
+                  <Card key={`history-${item.activity.id}-${item.student.id}-${index}`} className="p-4 space-y-2">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <h4 className="font-semibold text-foreground">{item.activity.name}</h4>
+                        <p className="text-sm text-muted-foreground">
+                          للطالب: {item.student.full_name}
+                        </p>
+                      </div>
+                      {status && (
+                        <Badge variant={status.variant} className="gap-1">
+                          <status.icon className="w-3 h-3" />
+                          {status.text}
+                        </Badge>
+                      )}
+                    </div>
+                    {item.approval?.response_date && (
+                      <p className="text-xs text-muted-foreground">
+                        تاريخ الرد: {new Date(item.approval.response_date).toLocaleDateString("ar-SA")}
+                      </p>
+                    )}
+                  </Card>
+                );
+              })
           )}
         </TabsContent>
       </Tabs>
