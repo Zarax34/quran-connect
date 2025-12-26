@@ -35,6 +35,7 @@ import { AnnouncementsManagement } from "./admin/AnnouncementsManagement";
 import { ParentsManagement } from "./admin/ParentsManagement";
 import { CoursesManagement } from "./admin/CoursesManagement";
 import { ActivitiesManagement } from "./admin/ActivitiesManagement";
+import { HolidaysManagement } from "./admin/HolidaysManagement";
 import { DailyReports } from "./teacher/DailyReports";
 import { ParentDashboard } from "./parent/ParentDashboard";
 import { StudentDashboard } from "./student/StudentDashboard";
@@ -45,7 +46,7 @@ import { UserSettings } from "./settings/UserSettings";
 import { StaffAccountsList } from "./admin/StaffAccountsList";
 
 type TabType = "home" | "students" | "reports" | "notifications" | "settings";
-type AdminView = "dashboard" | "centers" | "students" | "halaqat" | "users" | "announcements" | "parents" | "courses" | "activities" | "reports" | "student-accounts" | "parent-accounts" | "staff-accounts";
+type AdminView = "dashboard" | "centers" | "students" | "halaqat" | "users" | "announcements" | "parents" | "courses" | "activities" | "holidays" | "reports" | "student-accounts" | "parent-accounts" | "staff-accounts";
 
 interface Stats {
   totalStudents: number;
@@ -154,7 +155,7 @@ export const DashboardScreen = () => {
     { label: "الأنشطة", icon: Activity, view: "activities" as AdminView },
     { label: "الإعلانات", icon: Bell, view: "announcements" as AdminView },
     { label: "التقارير", icon: FileText, view: "reports" as AdminView },
-  ] : [
+] : [
     // Center admin actions - limited permissions
     { label: "الحلقات", icon: BookOpen, view: "halaqat" as AdminView },
     { label: "الطلاب", icon: Users, view: "students" as AdminView },
@@ -164,6 +165,7 @@ export const DashboardScreen = () => {
     { label: "حسابات المعلمين", icon: GraduationCap, view: "staff-accounts" as AdminView },
     { label: "الدورات", icon: GraduationCap, view: "courses" as AdminView },
     { label: "الأنشطة", icon: Activity, view: "activities" as AdminView },
+    { label: "العطلات", icon: CalendarDays, view: "holidays" as AdminView },
     { label: "الإعلانات", icon: Bell, view: "announcements" as AdminView },
     { label: "التقارير", icon: FileText, view: "reports" as AdminView },
   ];
@@ -290,6 +292,7 @@ export const DashboardScreen = () => {
               {adminView === "parents" && "إدارة أولياء الأمور"}
               {adminView === "courses" && "إدارة الدورات"}
               {adminView === "activities" && "إدارة الأنشطة"}
+              {adminView === "holidays" && "إدارة العطلات"}
               {adminView === "reports" && "التقارير اليومية"}
               {adminView === "student-accounts" && "حسابات الطلاب"}
               {adminView === "parent-accounts" && "حسابات أولياء الأمور"}
@@ -306,6 +309,7 @@ export const DashboardScreen = () => {
           {adminView === "parents" && <ParentsManagement />}
           {adminView === "courses" && <CoursesManagement />}
           {adminView === "activities" && <ActivitiesManagement />}
+          {adminView === "holidays" && <HolidaysManagement />}
           {adminView === "reports" && <DailyReports />}
           {adminView === "student-accounts" && <StudentAccountsList />}
           {adminView === "parent-accounts" && <ParentAccountsList />}

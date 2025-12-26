@@ -10,7 +10,8 @@ import {
   CheckCircle,
   XCircle,
   Clock,
-  Eye
+  Eye,
+  CalendarDays
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -29,8 +30,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { DailyReports } from "./DailyReports";
 import { UserSettings } from "@/components/settings/UserSettings";
+import { HolidaysManagement } from "@/components/admin/HolidaysManagement";
 
-type TabType = "home" | "reports" | "review" | "notifications" | "settings";
+type TabType = "home" | "reports" | "review" | "holidays" | "notifications" | "settings";
 
 interface Stats {
   myStudents: number;
@@ -396,6 +398,8 @@ export const TeacherDashboard = () => {
             )}
           </div>
         );
+      case "holidays":
+        return <HolidaysManagement />;
       case "notifications":
         return (
           <div className="space-y-4">
@@ -471,6 +475,18 @@ export const TeacherDashboard = () => {
                         {stats.pendingReports}
                       </Badge>
                     )}
+                  </button>
+                )}
+                
+                {isCommunicationOfficer && (
+                  <button
+                    onClick={() => setActiveTab("holidays")}
+                    className="flex flex-col items-center gap-2 p-4 rounded-xl bg-card border border-border/50 hover:bg-accent/50 transition-colors"
+                  >
+                    <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
+                      <CalendarDays className="w-6 h-6 text-primary" />
+                    </div>
+                    <span className="text-sm text-foreground font-medium">العطلات</span>
                   </button>
                 )}
               </div>
