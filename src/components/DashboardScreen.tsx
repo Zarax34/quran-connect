@@ -39,9 +39,10 @@ import { DailyReports } from "./teacher/DailyReports";
 import { ParentDashboard } from "./parent/ParentDashboard";
 import { StudentDashboard } from "./student/StudentDashboard";
 import { StudentAccountsList } from "./admin/StudentAccountsList";
+import { ParentAccountsList } from "./admin/ParentAccountsList";
 
 type TabType = "home" | "students" | "reports" | "notifications" | "settings";
-type AdminView = "dashboard" | "centers" | "students" | "halaqat" | "users" | "announcements" | "parents" | "courses" | "activities" | "reports" | "student-accounts";
+type AdminView = "dashboard" | "centers" | "students" | "halaqat" | "users" | "announcements" | "parents" | "courses" | "activities" | "reports" | "student-accounts" | "parent-accounts";
 
 interface Stats {
   totalStudents: number;
@@ -139,8 +140,9 @@ export const DashboardScreen = () => {
     { label: "الحلقات", icon: BookOpen, view: "halaqat" as AdminView },
     { label: "الطلاب", icon: Users, view: "students" as AdminView },
     { label: "حسابات الطلاب", icon: UserCheck, view: "student-accounts" as AdminView },
-    { label: "المستخدمين", icon: UserCog, view: "users" as AdminView },
     { label: "أولياء الأمور", icon: UserCheck, view: "parents" as AdminView },
+    { label: "حسابات أولياء الأمور", icon: UserCog, view: "parent-accounts" as AdminView },
+    { label: "المستخدمين", icon: UserCog, view: "users" as AdminView },
     { label: "الدورات", icon: GraduationCap, view: "courses" as AdminView },
     { label: "الأنشطة", icon: Activity, view: "activities" as AdminView },
     { label: "الإعلانات", icon: Bell, view: "announcements" as AdminView },
@@ -266,6 +268,7 @@ export const DashboardScreen = () => {
               {adminView === "activities" && "إدارة الأنشطة"}
               {adminView === "reports" && "التقارير اليومية"}
               {adminView === "student-accounts" && "حسابات الطلاب"}
+              {adminView === "parent-accounts" && "حسابات أولياء الأمور"}
             </h1>
           </div>
         </header>
@@ -280,6 +283,7 @@ export const DashboardScreen = () => {
           {adminView === "activities" && <ActivitiesManagement />}
           {adminView === "reports" && <DailyReports />}
           {adminView === "student-accounts" && <StudentAccountsList />}
+          {adminView === "parent-accounts" && <ParentAccountsList />}
         </main>
       </div>
     );
