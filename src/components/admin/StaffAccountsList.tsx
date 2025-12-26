@@ -21,6 +21,12 @@ interface StaffAccount {
   is_active: boolean;
 }
 
+interface Halqa {
+  id: string;
+  name: string;
+  teacher_id: string | null;
+}
+
 const ROLE_LABELS: Record<string, string> = {
   teacher: "معلم",
   communication_officer: "مسؤول تواصل",
@@ -34,6 +40,7 @@ const ROLE_COLORS: Record<string, string> = {
 export const StaffAccountsList = () => {
   const { selectedCenterId, isSuperAdmin } = useAuth();
   const [staff, setStaff] = useState<StaffAccount[]>([]);
+  const [halaqat, setHalaqat] = useState<Halqa[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [togglingUserId, setTogglingUserId] = useState<string | null>(null);
@@ -44,11 +51,30 @@ export const StaffAccountsList = () => {
     username: "",
     password: "",
     role: "teacher" as "teacher" | "communication_officer",
+    halqaId: "" as string,
   });
 
   useEffect(() => {
     fetchStaff();
+    fetchHalaqat();
   }, [selectedCenterId, isSuperAdmin]);
+
+  const fetchHalaqat = async () => {
+    if (!selectedCenterId) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from("halaqat")
+        .select("id, name, teacher_id")
+        .eq("center_id", selectedCenterId)
+        .eq("is_active", true);
+
+      if (error) throw error;
+      setHalaqat(data || []);
+    } catch (error) {
+      console.error("Error fetching halaqat:", error);
+    }
+  };
 
   const fetchStaff = async () => {
     try {
@@ -149,10 +175,24 @@ export const StaffAccountsList = () => {
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
 
+      // If teacher and halqa selected, assign the halqa to this teacher
+      if (formData.role === "teacher" && formData.halqaId && data?.userId) {
+        const { error: halqaError } = await supabase
+          .from("halaqat")
+          .update({ teacher_id: data.userId })
+          .eq("id", formData.halqaId);
+
+        if (halqaError) {
+          console.error("Error assigning halqa:", halqaError);
+          toast.warning("تم إنشاء الحساب لكن فشل تعيين الحلقة");
+        }
+      }
+
       toast.success("تم إنشاء الحساب بنجاح");
       setIsDialogOpen(false);
-      setFormData({ fullName: "", username: "", password: "", role: "teacher" });
+      setFormData({ fullName: "", username: "", password: "", role: "teacher", halqaId: "" });
       fetchStaff();
+      fetchHalaqat();
     } catch (error: any) {
       console.error("Error creating staff:", error);
       toast.error(error.message || "حدث خطأ في إنشاء الحساب");
@@ -162,7 +202,7 @@ export const StaffAccountsList = () => {
   };
 
   const resetForm = () => {
-    setFormData({ fullName: "", username: "", password: "", role: "teacher" });
+    setFormData({ fullName: "", username: "", password: "", role: "teacher", halqaId: "" });
   };
 
   const toggleUserStatus = async (userId: string, currentStatus: boolean) => {
@@ -270,7 +310,7 @@ export const StaffAccountsList = () => {
                 <Select
                   value={formData.role}
                   onValueChange={(value: "teacher" | "communication_officer") => 
-                    setFormData({ ...formData, role: value })
+                    setFormData({ ...formData, role: value, halqaId: "" })
                   }
                 >
                   <SelectTrigger>
@@ -282,6 +322,33 @@ export const StaffAccountsList = () => {
                   </SelectContent>
                 </Select>
               </div>
+
+              {formData.role === "teacher" && (
+                <div className="space-y-2">
+                  <Label htmlFor="halqa">الحلقة (اختياري)</Label>
+                  <Select
+                    value={formData.halqaId}
+                    onValueChange={(value) => setFormData({ ...formData, halqaId: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="اختر الحلقة" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">بدون حلقة</SelectItem>
+                      {halaqat
+                        .filter(h => !h.teacher_id)
+                        .map((halqa) => (
+                          <SelectItem key={halqa.id} value={halqa.id}>
+                            {halqa.name}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                  {halaqat.filter(h => !h.teacher_id).length === 0 && (
+                    <p className="text-xs text-muted-foreground">لا توجد حلقات متاحة بدون معلم</p>
+                  )}
+                </div>
+              )}
               
               <Button type="submit" className="w-full" disabled={isSubmitting}>
                 {isSubmitting ? (
