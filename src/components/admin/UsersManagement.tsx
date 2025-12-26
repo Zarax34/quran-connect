@@ -66,7 +66,7 @@ export const UsersManagement = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [formData, setFormData] = useState({
-    email: "",
+    username: "",
     password: "",
     full_name: "",
     role: "" as AppRole | "",
@@ -137,7 +137,7 @@ export const UsersManagement = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.email || !formData.password || !formData.full_name || !formData.role) {
+    if (!formData.password || !formData.full_name || !formData.role) {
       toast.error("يرجى ملء جميع الحقول المطلوبة");
       return;
     }
@@ -155,7 +155,7 @@ export const UsersManagement = () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          email: formData.email,
+          username: formData.username || formData.full_name,
           password: formData.password,
           fullName: formData.full_name,
           role: formData.role,
@@ -180,7 +180,7 @@ export const UsersManagement = () => {
 
   const resetForm = () => {
     setFormData({
-      email: "",
+      username: "",
       password: "",
       full_name: "",
       role: "",
@@ -233,15 +233,15 @@ export const UsersManagement = () => {
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium text-foreground">
-                  البريد الإلكتروني *
+                  اسم المستخدم (اختياري)
                 </label>
                 <Input
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  placeholder="أدخل البريد الإلكتروني"
+                  value={formData.username}
+                  onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                  placeholder="اسم المستخدم (إذا ترك فارغاً يستخدم الاسم الكامل)"
                   dir="ltr"
                 />
+                <p className="text-xs text-muted-foreground">إذا ترك فارغاً سيتم استخدام الاسم الكامل كاسم مستخدم</p>
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium text-foreground">

@@ -1,21 +1,24 @@
 import { useState, useEffect } from "react";
-import { Users, Search, Loader2, Key, User, Phone, Copy, Check } from "lucide-react";
+import { Users, Search, Loader2, Key, User, Copy, Check, Power } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 
 interface StudentAccount {
   id: string;
+  user_id: string;
   full_name: string;
   phone: string | null;
   halqa_name: string | null;
   center_name: string | null;
   has_account: boolean;
   parent_phone: string | null;
+  is_active: boolean;
 }
 
 export const StudentAccountsList = () => {
@@ -24,6 +27,7 @@ export const StudentAccountsList = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchStudentAccounts();
@@ -39,12 +43,13 @@ export const StudentAccountsList = () => {
           full_name,
           phone,
           user_id,
+          is_active,
           halqa_id,
           center_id,
           halaqat:halqa_id (name),
           centers:center_id (name)
         `)
-        .eq("is_active", true);
+        .not("user_id", "is", null);
 
       if (!isSuperAdmin && selectedCenterId) {
         query = query.eq("center_id", selectedCenterId);
@@ -70,22 +75,56 @@ export const StudentAccountsList = () => {
         const parentInfo = studentParentsData?.find(sp => sp.student_id === student.id);
         return {
           id: student.id,
+          user_id: student.user_id!,
           full_name: student.full_name,
           phone: student.phone,
           halqa_name: (student.halaqat as any)?.name || null,
           center_name: (student.centers as any)?.name || null,
           has_account: !!student.user_id,
           parent_phone: (parentInfo?.parents as any)?.phone || null,
+          is_active: student.is_active ?? true,
         };
       });
 
-      // Filter only students with accounts
-      setStudents(studentAccounts.filter(s => s.has_account));
+      setStudents(studentAccounts);
     } catch (error) {
       console.error("Error fetching student accounts:", error);
       toast.error("حدث خطأ في تحميل حسابات الطلاب");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const toggleAccountStatus = async (student: StudentAccount) => {
+    setTogglingId(student.id);
+    
+    try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const action = student.is_active ? "disable" : "enable";
+      
+      const response = await fetch(`${supabaseUrl}/functions/v1/toggle-user-status`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: student.user_id,
+          action,
+        }),
+      });
+
+      const result = await response.json();
+      if (result.error) throw new Error(result.error);
+
+      // Update local state
+      setStudents(prev => prev.map(s => 
+        s.id === student.id ? { ...s, is_active: !s.is_active } : s
+      ));
+
+      toast.success(student.is_active ? "تم تعطيل الحساب" : "تم تفعيل الحساب");
+    } catch (error: any) {
+      console.error("Error toggling account:", error);
+      toast.error(error.message || "حدث خطأ في تغيير حالة الحساب");
+    } finally {
+      setTogglingId(null);
     }
   };
 
@@ -161,17 +200,32 @@ export const StudentAccountsList = () => {
       ) : (
         <div className="space-y-3">
           {filteredStudents.map((student) => (
-            <Card key={student.id} className="p-4">
+            <Card key={student.id} className={`p-4 ${!student.is_active ? 'opacity-60' : ''}`}>
               <div className="flex items-start gap-4">
                 <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
                   <User className="w-6 h-6 text-primary" />
                 </div>
                 <div className="flex-1 min-w-0 space-y-2">
-                  <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
                     <h3 className="font-semibold text-foreground">{student.full_name}</h3>
-                    <Badge variant="secondary" className="bg-green-500/10 text-green-600">
-                      مفعّل
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      <Badge 
+                        variant="secondary" 
+                        className={student.is_active ? "bg-green-500/10 text-green-600" : "bg-destructive/10 text-destructive"}
+                      >
+                        {student.is_active ? "مفعّل" : "معطّل"}
+                      </Badge>
+                      <div className="flex items-center gap-1">
+                        {togglingId === student.id ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Switch
+                            checked={student.is_active}
+                            onCheckedChange={() => toggleAccountStatus(student)}
+                          />
+                        )}
+                      </div>
+                    </div>
                   </div>
                   
                   {student.halqa_name && (

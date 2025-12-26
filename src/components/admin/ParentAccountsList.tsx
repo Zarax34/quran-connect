@@ -4,15 +4,18 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 interface ParentAccount {
   id: string;
+  user_id: string;
   full_name: string;
   phone: string;
   has_account: boolean;
   children_names: string[];
+  is_active: boolean;
 }
 
 export const ParentAccountsList = () => {
@@ -20,6 +23,7 @@ export const ParentAccountsList = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchParentAccounts();
@@ -52,17 +56,19 @@ export const ParentAccountsList = () => {
         `)
         .in("parent_id", parentIds);
 
-      // Map parents with their children
+      // Map parents with their children (default to active since we can't check auth status from client)
       const parentAccounts: ParentAccount[] = parentsData.map(parent => {
         const childrenData = studentParentsData?.filter(sp => sp.parent_id === parent.id) || [];
         const childrenNames = childrenData.map(c => (c.students as any)?.full_name).filter(Boolean);
         
         return {
           id: parent.id,
+          user_id: parent.user_id!,
           full_name: parent.full_name,
           phone: parent.phone,
           has_account: !!parent.user_id,
           children_names: childrenNames,
+          is_active: true, // Default to active, will track locally
         };
       });
 
@@ -72,6 +78,39 @@ export const ParentAccountsList = () => {
       toast.error("حدث خطأ في تحميل حسابات أولياء الأمور");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const toggleAccountStatus = async (parent: ParentAccount) => {
+    setTogglingId(parent.id);
+    
+    try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const action = parent.is_active ? "disable" : "enable";
+      
+      const response = await fetch(`${supabaseUrl}/functions/v1/toggle-user-status`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: parent.user_id,
+          action,
+        }),
+      });
+
+      const result = await response.json();
+      if (result.error) throw new Error(result.error);
+
+      // Update local state
+      setParents(prev => prev.map(p => 
+        p.id === parent.id ? { ...p, is_active: !p.is_active } : p
+      ));
+
+      toast.success(parent.is_active ? "تم تعطيل الحساب" : "تم تفعيل الحساب");
+    } catch (error: any) {
+      console.error("Error toggling account:", error);
+      toast.error(error.message || "حدث خطأ في تغيير حالة الحساب");
+    } finally {
+      setTogglingId(null);
     }
   };
 
@@ -143,17 +182,32 @@ export const ParentAccountsList = () => {
       ) : (
         <div className="space-y-3">
           {filteredParents.map((parent) => (
-            <Card key={parent.id} className="p-4">
+            <Card key={parent.id} className={`p-4 ${!parent.is_active ? 'opacity-60' : ''}`}>
               <div className="flex items-start gap-4">
                 <div className="w-12 h-12 rounded-full bg-secondary/10 flex items-center justify-center shrink-0">
                   <User className="w-6 h-6 text-secondary" />
                 </div>
                 <div className="flex-1 min-w-0 space-y-2">
-                  <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
                     <h3 className="font-semibold text-foreground">{parent.full_name}</h3>
-                    <Badge variant="secondary" className="bg-green-500/10 text-green-600">
-                      مفعّل
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      <Badge 
+                        variant="secondary" 
+                        className={parent.is_active ? "bg-green-500/10 text-green-600" : "bg-destructive/10 text-destructive"}
+                      >
+                        {parent.is_active ? "مفعّل" : "معطّل"}
+                      </Badge>
+                      <div className="flex items-center gap-1">
+                        {togglingId === parent.id ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Switch
+                            checked={parent.is_active}
+                            onCheckedChange={() => toggleAccountStatus(parent)}
+                          />
+                        )}
+                      </div>
+                    </div>
                   </div>
                   
                   {parent.children_names.length > 0 && (

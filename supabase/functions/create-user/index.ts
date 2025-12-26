@@ -6,6 +6,18 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Generate a fake email from username for Supabase auth
+function generateEmail(username: string): string {
+  // Remove spaces and special characters, convert to lowercase
+  const sanitized = username
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "_")
+    .replace(/[^\w]/g, "");
+  const timestamp = Date.now();
+  return `${sanitized}_${timestamp}@quran.local`;
+}
+
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
@@ -24,13 +36,16 @@ serve(async (req) => {
       },
     });
 
-    const { email, password, fullName, role, centerId } = await req.json();
+    const { email, username, password, fullName, role, centerId } = await req.json();
 
-    console.log("Creating user:", email, "with role:", role);
+    // Use email if provided, otherwise generate from username or fullName
+    const userEmail = email || generateEmail(username || fullName);
+    
+    console.log("Creating user:", userEmail, "with role:", role);
 
     // Create user in auth
     const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-      email,
+      email: userEmail,
       password,
       email_confirm: true,
       user_metadata: {
@@ -58,6 +73,7 @@ serve(async (req) => {
       .upsert({
         id: userId,
         full_name: fullName,
+        email: email || null, // Only store real email if provided
       });
 
     if (profileError) {
@@ -84,7 +100,7 @@ serve(async (req) => {
       );
     }
 
-    console.log("User setup complete:", email);
+    console.log("User setup complete:", fullName);
 
     return new Response(
       JSON.stringify({ 
