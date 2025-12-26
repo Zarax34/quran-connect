@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import {
   Table,
   TableBody,
@@ -44,9 +46,15 @@ interface Activity {
   center_id: string;
   requires_approval: boolean;
   is_active: boolean;
+  halaqat?: { id: string; name: string }[];
 }
 
 interface Center {
+  id: string;
+  name: string;
+}
+
+interface Halqa {
   id: string;
   name: string;
 }
@@ -77,6 +85,7 @@ export const ActivitiesManagement = () => {
   const { isSuperAdmin, selectedCenterId } = useAuth();
   const [activities, setActivities] = useState<Activity[]>([]);
   const [centers, setCenters] = useState<Center[]>([]);
+  const [halaqat, setHalaqat] = useState<Halqa[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [parents, setParents] = useState<Parent[]>([]);
   const [approvals, setApprovals] = useState<Approval[]>([]);
@@ -96,6 +105,7 @@ export const ActivitiesManagement = () => {
     location: "",
     requires_approval: true,
     center_id: "",
+    selectedHalaqat: [] as string[],
   });
   const [approvalForm, setApprovalForm] = useState({ student_id: "", parent_id: "" });
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -104,6 +114,7 @@ export const ActivitiesManagement = () => {
     fetchActivities();
     fetchStudents();
     fetchParents();
+    fetchHalaqat();
     if (isSuperAdmin) fetchCenters();
   }, [selectedCenterId, isSuperAdmin]);
 
@@ -118,7 +129,31 @@ export const ActivitiesManagement = () => {
 
       const { data, error } = await query;
       if (error) throw error;
-      setActivities(data || []);
+
+      // Fetch activity halaqat
+      if (data && data.length > 0) {
+        const activityIds = data.map(a => a.id);
+        const { data: activityHalaqatData } = await supabase
+          .from("activity_halaqat")
+          .select("activity_id, halqa_id")
+          .in("activity_id", activityIds);
+
+        const { data: halaqatData } = await supabase
+          .from("halaqat")
+          .select("id, name");
+
+        const activitiesWithHalaqat = data.map(activity => {
+          const relatedHalaqatIds = activityHalaqatData
+            ?.filter(ah => ah.activity_id === activity.id)
+            .map(ah => ah.halqa_id) || [];
+          const relatedHalaqat = halaqatData?.filter(h => relatedHalaqatIds.includes(h.id)) || [];
+          return { ...activity, halaqat: relatedHalaqat };
+        });
+
+        setActivities(activitiesWithHalaqat);
+      } else {
+        setActivities([]);
+      }
 
       const { data: appData } = await supabase
         .from("activity_approvals")
@@ -137,6 +172,13 @@ export const ActivitiesManagement = () => {
     setCenters(data || []);
   };
 
+  const fetchHalaqat = async () => {
+    let query = supabase.from("halaqat").select("id, name").eq("is_active", true);
+    if (!isSuperAdmin && selectedCenterId) query = query.eq("center_id", selectedCenterId);
+    const { data } = await query;
+    setHalaqat(data || []);
+  };
+
   const fetchStudents = async () => {
     let query = supabase.from("students").select("id, full_name").eq("is_active", true);
     if (!isSuperAdmin && selectedCenterId) query = query.eq("center_id", selectedCenterId);
@@ -147,6 +189,22 @@ export const ActivitiesManagement = () => {
   const fetchParents = async () => {
     const { data } = await supabase.from("parents").select("id, full_name");
     setParents(data || []);
+  };
+
+  const toggleHalqa = (halqaId: string) => {
+    setFormData(prev => ({
+      ...prev,
+      selectedHalaqat: prev.selectedHalaqat.includes(halqaId)
+        ? prev.selectedHalaqat.filter(id => id !== halqaId)
+        : [...prev.selectedHalaqat, halqaId],
+    }));
+  };
+
+  const selectAllHalaqat = () => {
+    setFormData(prev => ({
+      ...prev,
+      selectedHalaqat: halaqat.map(h => h.id),
+    }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -162,13 +220,39 @@ export const ActivitiesManagement = () => {
       return;
     }
 
+    if (formData.requires_approval && formData.selectedHalaqat.length === 0 && !editingActivity) {
+      toast.error("يرجى اختيار حلقة واحدة على الأقل عند طلب الموافقة");
+      return;
+    }
+
     setIsSubmitting(true);
     try {
-      const response = await supabase.functions.invoke("admin-operations", {
-        body: JSON.stringify({
-          action: editingActivity ? "update" : "insert",
-          table: "activities",
-          data: {
+      let activityId = editingActivity?.id;
+
+      if (editingActivity) {
+        // Update existing activity
+        const response = await supabase.functions.invoke("admin-operations", {
+          body: JSON.stringify({
+            action: "update",
+            table: "activities",
+            data: {
+              name: formData.name.trim(),
+              description: formData.description.trim() || null,
+              start_date: formData.start_date,
+              end_date: formData.end_date || null,
+              location: formData.location.trim() || null,
+              requires_approval: formData.requires_approval,
+              center_id: centerId,
+            },
+            id: editingActivity.id,
+          }),
+        });
+        if (response.error) throw response.error;
+      } else {
+        // Insert new activity
+        const { data: newActivity, error: insertError } = await supabase
+          .from("activities")
+          .insert({
             name: formData.name.trim(),
             description: formData.description.trim() || null,
             start_date: formData.start_date,
@@ -176,14 +260,29 @@ export const ActivitiesManagement = () => {
             location: formData.location.trim() || null,
             requires_approval: formData.requires_approval,
             center_id: centerId,
-          },
-          id: editingActivity?.id,
-        }),
-      });
+          })
+          .select()
+          .single();
 
-      if (response.error) throw response.error;
+        if (insertError) throw insertError;
+        activityId = newActivity.id;
 
-      toast.success(editingActivity ? "تم تحديث النشاط بنجاح" : "تم إضافة النشاط بنجاح");
+        // Insert halaqat relationships (this triggers automatic approval requests)
+        if (formData.selectedHalaqat.length > 0 && activityId) {
+          const halaqatInserts = formData.selectedHalaqat.map(halqaId => ({
+            activity_id: activityId,
+            halqa_id: halqaId,
+          }));
+
+          const { error: halaqatError } = await supabase
+            .from("activity_halaqat")
+            .insert(halaqatInserts);
+
+          if (halaqatError) throw halaqatError;
+        }
+      }
+
+      toast.success(editingActivity ? "تم تحديث النشاط بنجاح" : "تم إضافة النشاط وإرسال طلبات الموافقة تلقائياً");
       setIsDialogOpen(false);
       resetForm();
       fetchActivities();
@@ -262,6 +361,7 @@ export const ActivitiesManagement = () => {
       location: activity.location || "",
       requires_approval: activity.requires_approval,
       center_id: activity.center_id,
+      selectedHalaqat: activity.halaqat?.map(h => h.id) || [],
     });
     setIsDialogOpen(true);
   };
@@ -283,7 +383,7 @@ export const ActivitiesManagement = () => {
   };
 
   const resetForm = () => {
-    setFormData({ name: "", description: "", start_date: "", end_date: "", location: "", requires_approval: true, center_id: selectedCenterId || "" });
+    setFormData({ name: "", description: "", start_date: "", end_date: "", location: "", requires_approval: true, center_id: selectedCenterId || "", selectedHalaqat: [] });
     setEditingActivity(null);
   };
 
@@ -347,6 +447,42 @@ export const ActivitiesManagement = () => {
                 <label className="text-sm font-medium text-foreground">يتطلب موافقة ولي الأمر</label>
                 <Switch checked={formData.requires_approval} onCheckedChange={(v) => setFormData({ ...formData, requires_approval: v })} />
               </div>
+
+              {/* Halaqat Selection - only show for new activities */}
+              {!editingActivity && formData.requires_approval && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm font-medium text-foreground">الحلقات المشاركة *</Label>
+                    <Button type="button" variant="ghost" size="sm" onClick={selectAllHalaqat}>
+                      تحديد الكل
+                    </Button>
+                  </div>
+                  <div className="border border-border rounded-lg p-3 max-h-40 overflow-y-auto space-y-2">
+                    {halaqat.length === 0 ? (
+                      <p className="text-sm text-muted-foreground text-center">لا توجد حلقات متاحة</p>
+                    ) : (
+                      halaqat.map((halqa) => (
+                        <div key={halqa.id} className="flex items-center gap-2">
+                          <Checkbox
+                            id={`halqa-${halqa.id}`}
+                            checked={formData.selectedHalaqat.includes(halqa.id)}
+                            onCheckedChange={() => toggleHalqa(halqa.id)}
+                          />
+                          <Label htmlFor={`halqa-${halqa.id}`} className="font-normal cursor-pointer">
+                            {halqa.name}
+                          </Label>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  {formData.selectedHalaqat.length > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      تم اختيار {formData.selectedHalaqat.length} حلقة - سيتم إرسال طلبات الموافقة تلقائياً لأولياء الأمور
+                    </p>
+                  )}
+                </div>
+              )}
+
               <div className="flex gap-2 pt-4">
                 <Button type="submit" disabled={isSubmitting} className="flex-1">{isSubmitting ? "جاري الحفظ..." : editingActivity ? "تحديث" : "إضافة"}</Button>
                 <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)} className="flex-1">إلغاء</Button>
@@ -385,9 +521,18 @@ export const ActivitiesManagement = () => {
                     <TableRow key={activity.id}>
                       <TableCell>
                         <div className="font-medium text-foreground">{activity.name}</div>
-                        <div className="flex items-center gap-2 mt-1">
+                        <div className="flex flex-wrap items-center gap-2 mt-1">
                           {activity.location && <span className="text-xs text-muted-foreground">{activity.location}</span>}
                           {activity.requires_approval && <Badge variant="outline" className="text-xs">يتطلب موافقة</Badge>}
+                          {activity.halaqat && activity.halaqat.length > 0 && (
+                            <div className="flex flex-wrap gap-1">
+                              {activity.halaqat.map(h => (
+                                <span key={h.id} className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+                                  {h.name}
+                                </span>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       </TableCell>
                       <TableCell className="text-muted-foreground text-sm">
@@ -405,15 +550,10 @@ export const ActivitiesManagement = () => {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center justify-center gap-1">
-                          {activity.requires_approval && (
-                            <>
-                              <Button variant="ghost" size="icon" onClick={() => openPreviewDialog(activity)} title="معاينة">
-                                <Eye className="h-4 w-4" />
-                              </Button>
-                              <Button variant="ghost" size="icon" onClick={() => openApprovalDialog(activity)} title="طلب موافقة">
-                                <CheckCircle className="h-4 w-4" />
-                              </Button>
-                            </>
+                          {activity.requires_approval && actApprovals.length > 0 && (
+                            <Button variant="ghost" size="icon" onClick={() => openPreviewDialog(activity)} title="معاينة">
+                              <Eye className="h-4 w-4" />
+                            </Button>
                           )}
                           <Button variant="ghost" size="icon" onClick={() => openEditDialog(activity)}><Edit className="h-4 w-4" /></Button>
                           <Button variant="ghost" size="icon" onClick={() => handleDelete(activity.id)} className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4" /></Button>
