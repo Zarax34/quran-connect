@@ -119,6 +119,42 @@ export type Database = {
           },
         ]
       }
+      activity_halaqat: {
+        Row: {
+          activity_id: string
+          created_at: string | null
+          halqa_id: string
+          id: string
+        }
+        Insert: {
+          activity_id: string
+          created_at?: string | null
+          halqa_id: string
+          id?: string
+        }
+        Update: {
+          activity_id?: string
+          created_at?: string | null
+          halqa_id?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "activity_halaqat_activity_id_fkey"
+            columns: ["activity_id"]
+            isOneToOne: false
+            referencedRelation: "activities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activity_halaqat_halqa_id_fkey"
+            columns: ["halqa_id"]
+            isOneToOne: false
+            referencedRelation: "halaqat"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       announcements: {
         Row: {
           center_id: string | null
