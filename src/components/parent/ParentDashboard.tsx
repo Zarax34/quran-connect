@@ -357,28 +357,6 @@ export const ParentDashboard = () => {
     }
   };
 
-  const handleHolidayApproval = async (attendanceId: string, approved: boolean) => {
-    setIsSubmitting(true);
-    try {
-      const { error } = await supabase
-        .from("holiday_attendance")
-        .update({
-          parent_approved: approved,
-          parent_response_date: new Date().toISOString()
-        })
-        .eq("id", attendanceId);
-
-      if (error) throw error;
-
-      toast.success(approved ? "تمت الموافقة على حضور العطلة" : "تم رفض حضور العطلة");
-      fetchHolidayAttendances();
-    } catch (error) {
-      console.error("Error updating holiday approval:", error);
-      toast.error("حدث خطأ في تحديث الموافقة");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
 
   const handleApproval = async (approved: boolean) => {
     if (!approvalDialog) return;
@@ -549,17 +527,8 @@ export const ParentDashboard = () => {
       )}
 
       {/* Tabs */}
-      <Tabs defaultValue="holidays" className="w-full">
+      <Tabs defaultValue="activities" className="w-full">
         <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="holidays" className="gap-2 relative">
-            <Calendar className="w-4 h-4" />
-            العطلات
-            {holidayAttendances.filter(h => h.parent_approved === null).length > 0 && (
-              <Badge variant="destructive" className="absolute -top-1 -left-1 h-5 w-5 p-0 text-xs flex items-center justify-center">
-                {holidayAttendances.filter(h => h.parent_approved === null).length}
-              </Badge>
-            )}
-          </TabsTrigger>
           <TabsTrigger value="activities" className="gap-2 relative">
             <CalendarDays className="w-4 h-4" />
             الأنشطة
@@ -568,6 +537,10 @@ export const ParentDashboard = () => {
                 {pendingApprovals.length}
               </Badge>
             )}
+          </TabsTrigger>
+          <TabsTrigger value="holidays" className="gap-2">
+            <Calendar className="w-4 h-4" />
+            العطلات
           </TabsTrigger>
           <TabsTrigger value="reports" className="gap-2">
             <FileText className="w-4 h-4" />
@@ -579,7 +552,7 @@ export const ParentDashboard = () => {
           </TabsTrigger>
         </TabsList>
 
-        {/* Holidays Tab */}
+        {/* Holidays Tab - Display Only */}
         <TabsContent value="holidays" className="space-y-4">
           {holidayAttendances.length === 0 ? (
             <Card className="p-6 text-center">
@@ -587,80 +560,38 @@ export const ParentDashboard = () => {
               <p className="text-muted-foreground">لا توجد عطلات مسجلة لأبنائك حالياً</p>
             </Card>
           ) : (
-            holidayAttendances.map((item) => {
-              const isPending = item.parent_approved === null;
-              
-              return (
-                <Card key={item.id} className="p-4 space-y-3">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h4 className="font-semibold text-foreground">{item.holiday?.name}</h4>
-                      <p className="text-sm text-muted-foreground">
-                        للطالب: {item.student?.full_name}
-                      </p>
-                    </div>
-                    {item.parent_approved === true ? (
-                      <Badge variant="default" className="gap-1">
-                        <CheckCircle className="w-3 h-3" />
-                        تمت الموافقة
-                      </Badge>
-                    ) : item.parent_approved === false ? (
-                      <Badge variant="destructive" className="gap-1">
-                        <XCircle className="w-3 h-3" />
-                        مرفوض
-                      </Badge>
-                    ) : (
-                      <Badge variant="outline" className="gap-1">
-                        <Clock className="w-3 h-3" />
-                        في انتظار الرد
-                      </Badge>
-                    )}
+            holidayAttendances.map((item) => (
+              <Card key={item.id} className="p-4 space-y-3">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <h4 className="font-semibold text-foreground">{item.holiday?.name}</h4>
+                    <p className="text-sm text-muted-foreground">
+                      للطالب: {item.student?.full_name}
+                    </p>
                   </div>
-
-                  {item.holiday?.reason && (
-                    <p className="text-sm text-muted-foreground">السبب: {item.holiday.reason}</p>
+                  {item.attended && (
+                    <Badge variant="secondary" className="gap-1">
+                      <CheckCircle className="w-3 h-3" />
+                      حضر
+                    </Badge>
                   )}
+                </div>
 
-                  <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                    <span className="flex items-center gap-1">
-                      <Calendar className="w-4 h-4" />
-                      {item.holiday?.start_date && new Date(item.holiday.start_date).toLocaleDateString("ar-SA")}
-                      {item.holiday?.end_date && item.holiday.end_date !== item.holiday.start_date && (
-                        <> - {new Date(item.holiday.end_date).toLocaleDateString("ar-SA")}</>
-                      )}
-                    </span>
-                    {item.attended && (
-                      <Badge variant="secondary" className="gap-1">
-                        <CheckCircle className="w-3 h-3" />
-                        حضر
-                      </Badge>
+                {item.holiday?.reason && (
+                  <p className="text-sm text-muted-foreground">السبب: {item.holiday.reason}</p>
+                )}
+
+                <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                  <span className="flex items-center gap-1">
+                    <Calendar className="w-4 h-4" />
+                    {item.holiday?.start_date && new Date(item.holiday.start_date).toLocaleDateString("ar-SA")}
+                    {item.holiday?.end_date && item.holiday.end_date !== item.holiday.start_date && (
+                      <> - {new Date(item.holiday.end_date).toLocaleDateString("ar-SA")}</>
                     )}
-                  </div>
-
-                  {isPending && (
-                    <div className="flex gap-2 pt-2 border-t">
-                      <Button
-                        className="flex-1 gap-2"
-                        onClick={() => handleHolidayApproval(item.id, true)}
-                        disabled={isSubmitting}
-                      >
-                        <CheckCircle className="w-4 h-4" />
-                        موافقة
-                      </Button>
-                      <Button
-                        variant="outline"
-                        className="flex-1 gap-2"
-                        onClick={() => handleHolidayApproval(item.id, false)}
-                        disabled={isSubmitting}
-                      >
-                        <XCircle className="w-4 h-4" />
-                        رفض
-                      </Button>
-                    </div>
-                  )}
-                </Card>
-              );
-            })
+                  </span>
+                </div>
+              </Card>
+            ))
           )}
         </TabsContent>
 
