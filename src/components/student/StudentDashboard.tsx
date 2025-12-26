@@ -12,7 +12,8 @@ import {
   FileText,
   Award,
   Loader2,
-  BarChart3
+  CalendarDays,
+  MapPin
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -57,11 +58,29 @@ interface AttendanceStats {
   total: number;
 }
 
+interface Activity {
+  id: string;
+  name: string;
+  description: string | null;
+  start_date: string;
+  end_date: string | null;
+  location: string | null;
+  requires_approval: boolean;
+}
+
+interface ActivityApproval {
+  id: string;
+  activity_id: string;
+  approved: boolean | null;
+  activity?: Activity;
+}
+
 export const StudentDashboard = () => {
   const { user } = useAuth();
   const [isLoading, setIsLoading] = useState(true);
   const [studentInfo, setStudentInfo] = useState<StudentInfo | null>(null);
   const [reportEntries, setReportEntries] = useState<ReportEntry[]>([]);
+  const [activities, setActivities] = useState<ActivityApproval[]>([]);
   const [attendanceStats, setAttendanceStats] = useState<AttendanceStats>({
     present: 0,
     absent: 0,
@@ -154,6 +173,24 @@ export const StudentDashboard = () => {
         });
 
         setAttendanceStats(stats);
+
+        // Fetch activities for this student
+        const { data: activitiesData, error: activitiesError } = await supabase
+          .from("activity_approvals")
+          .select(`
+            id,
+            activity_id,
+            approved,
+            activities (*)
+          `)
+          .eq("student_id", student.id);
+
+        if (activitiesError) throw activitiesError;
+
+        setActivities(activitiesData?.map((a: any) => ({
+          ...a,
+          activity: a.activities
+        })) || []);
       }
     } catch (error) {
       console.error("Error fetching student data:", error);
@@ -195,6 +232,16 @@ export const StudentDashboard = () => {
       case "talqeen": return "تلقين";
       default: return type;
     }
+  };
+
+  const getApprovalStatus = (approved: boolean | null) => {
+    if (approved === null) {
+      return { text: "في انتظار موافقة ولي الأمر", variant: "outline" as const, icon: Clock };
+    }
+    if (approved) {
+      return { text: "تمت الموافقة", variant: "default" as const, icon: CheckCircle };
+    }
+    return { text: "مرفوض", variant: "destructive" as const, icon: XCircle };
   };
 
   const attendanceRate = attendanceStats.total > 0 
@@ -296,13 +343,60 @@ export const StudentDashboard = () => {
         </Card>
       )}
 
-      {/* Tabs for Reports, Attendance, and Progress */}
-      <Tabs defaultValue="progress" className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
+      {/* Tabs for Reports, Attendance, Progress, and Activities */}
+      <Tabs defaultValue="activities" className="w-full">
+        <TabsList className="grid w-full grid-cols-4">
+          <TabsTrigger value="activities">الأنشطة</TabsTrigger>
           <TabsTrigger value="progress">التقدم</TabsTrigger>
           <TabsTrigger value="reports">التقارير</TabsTrigger>
           <TabsTrigger value="attendance">الحضور</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="activities" className="mt-4 space-y-3">
+          {activities.length === 0 ? (
+            <Card className="p-6 text-center">
+              <CalendarDays className="w-10 h-10 text-muted-foreground mx-auto mb-2" />
+              <p className="text-muted-foreground">لا توجد أنشطة مسجلة حالياً</p>
+            </Card>
+          ) : (
+            activities.map(item => {
+              const status = getApprovalStatus(item.approved);
+              
+              return (
+                <Card key={item.id}>
+                  <CardContent className="pt-4">
+                    <div className="flex items-start justify-between mb-2">
+                      <h4 className="font-semibold text-foreground">{item.activity?.name}</h4>
+                      <Badge variant={status.variant} className="gap-1">
+                        <status.icon className="w-3 h-3" />
+                        {status.text}
+                      </Badge>
+                    </div>
+                    
+                    {item.activity?.description && (
+                      <p className="text-sm text-muted-foreground mb-2">{item.activity.description}</p>
+                    )}
+
+                    <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                      {item.activity?.start_date && (
+                        <span className="flex items-center gap-1">
+                          <Calendar className="w-4 h-4" />
+                          {format(new Date(item.activity.start_date), "d MMMM yyyy", { locale: ar })}
+                        </span>
+                      )}
+                      {item.activity?.location && (
+                        <span className="flex items-center gap-1">
+                          <MapPin className="w-4 h-4" />
+                          {item.activity.location}
+                        </span>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })
+          )}
+        </TabsContent>
 
         <TabsContent value="progress" className="mt-4">
           <ProgressChart reportEntries={reportEntries} />
