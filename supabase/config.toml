@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.login-by-name]
 verify_jwt = false
+
+[functions.toggle-user-status]
+verify_jwt = false
