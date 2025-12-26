@@ -133,7 +133,7 @@ const RECITATION_TYPES: { value: RecitationType; label: string }[] = [
 ];
 
 export const DailyReports = () => {
-  const { user, isSuperAdmin, selectedCenterId } = useAuth();
+  const { user, isSuperAdmin, selectedCenterId, roles } = useAuth();
   const [reports, setReports] = useState<Report[]>([]);
   const [halaqat, setHalaqat] = useState<Halqa[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
@@ -157,26 +157,52 @@ export const DailyReports = () => {
   const [viewEntries, setViewEntries] = useState<any[]>([]);
   const [loadingDetails, setLoadingDetails] = useState(false);
 
+  const isCommunicationOfficer = roles.some(r => r.role === "communication_officer");
+  const isCenterAdmin = roles.some(r => r.role === "center_admin");
+
   useEffect(() => {
     fetchData();
-  }, [selectedCenterId, isSuperAdmin]);
+  }, [selectedCenterId, isSuperAdmin, user?.id]);
 
   const fetchData = async () => {
+    if (!user?.id) return;
+    
     try {
-      // Fetch halaqat
-      let halaqatQuery = supabase.from("halaqat").select("*").eq("is_active", true);
-      if (!isSuperAdmin && selectedCenterId) {
-        halaqatQuery = halaqatQuery.eq("center_id", selectedCenterId);
+      // Fetch halaqat based on role
+      let halaqatData: Halqa[] = [];
+      
+      if (isSuperAdmin || isCenterAdmin || isCommunicationOfficer) {
+        // Super admin, center admin, and communication officer can see all halaqat
+        let halaqatQuery = supabase.from("halaqat").select("*").eq("is_active", true);
+        if (!isSuperAdmin && selectedCenterId) {
+          halaqatQuery = halaqatQuery.eq("center_id", selectedCenterId);
+        }
+        const { data } = await halaqatQuery;
+        halaqatData = data || [];
+      } else {
+        // Regular teacher can only see their own halqa
+        const { data } = await supabase
+          .from("halaqat")
+          .select("*")
+          .eq("teacher_id", user.id)
+          .eq("is_active", true);
+        halaqatData = data || [];
       }
-      const { data: halaqatData } = await halaqatQuery;
-      setHalaqat(halaqatData || []);
+      
+      setHalaqat(halaqatData);
 
-      // Fetch reports
-      const { data: reportsData } = await supabase
+      // Fetch reports - teachers see only their reports, others see all
+      let reportsQuery = supabase
         .from("reports")
         .select("*, halqa:halaqat(name)")
         .order("report_date", { ascending: false })
         .limit(20);
+      
+      if (!isSuperAdmin && !isCenterAdmin && !isCommunicationOfficer) {
+        reportsQuery = reportsQuery.eq("teacher_id", user.id);
+      }
+      
+      const { data: reportsData } = await reportsQuery;
       setReports(reportsData || []);
     } catch (error) {
       console.error("Error fetching data:", error);
