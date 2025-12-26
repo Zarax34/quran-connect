@@ -42,28 +42,59 @@ serve(async (req) => {
     let email = trimmedIdentifier;
 
     if (!emailRegex.test(trimmedIdentifier)) {
-      // Look up email by name using service role (bypasses RLS)
-      const { data: profiles } = await supabaseAdmin
+      // First, try to find by name in profiles with email
+      const { data: profilesWithEmail } = await supabaseAdmin
         .from("profiles")
-        .select("email, full_name")
+        .select("id, email, full_name")
         .not("email", "is", null);
 
-      console.log("Found profiles:", profiles?.length);
+      console.log("Found profiles with email:", profilesWithEmail?.length);
 
       // Find profile with matching name (ignoring trailing/leading spaces)
-      const matchedProfile = profiles?.find(p => 
+      let matchedProfile = profilesWithEmail?.find(p => 
         p.full_name?.trim() === trimmedIdentifier
       );
 
       if (matchedProfile?.email) {
         email = matchedProfile.email;
-        console.log("Found email for user:", email);
+        console.log("Found email in profile for user:", email);
       } else {
-        console.log("No profile found for:", trimmedIdentifier);
-        return new Response(
-          JSON.stringify({ error: "اسم المستخدم غير موجود" }),
-          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        // If not found in profiles.email, search in profiles by name and get auth user's email
+        const { data: allProfiles } = await supabaseAdmin
+          .from("profiles")
+          .select("id, full_name");
+        
+        console.log("Total profiles:", allProfiles?.length);
+        
+        const profileMatch = allProfiles?.find(p => 
+          p.full_name?.trim() === trimmedIdentifier
         );
+
+        if (profileMatch) {
+          console.log("Found profile by name, looking up auth user:", profileMatch.id);
+          
+          // Get the user's email from auth.users using admin API
+          const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.getUserById(profileMatch.id);
+          
+          if (authError) {
+            console.error("Error getting auth user:", authError);
+          } else if (authUser?.user?.email) {
+            email = authUser.user.email;
+            console.log("Found email from auth user:", email);
+          } else {
+            console.log("No email found in auth user");
+            return new Response(
+              JSON.stringify({ error: "اسم المستخدم غير موجود" }),
+              { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          }
+        } else {
+          console.log("No profile found for:", trimmedIdentifier);
+          return new Response(
+            JSON.stringify({ error: "اسم المستخدم غير موجود" }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
       }
     }
 
