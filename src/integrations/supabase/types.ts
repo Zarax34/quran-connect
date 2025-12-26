@@ -473,6 +473,9 @@ export type Database = {
           marked_at: string | null
           marked_by: string | null
           notes: string | null
+          parent_approved: boolean | null
+          parent_id: string | null
+          parent_response_date: string | null
           student_id: string
         }
         Insert: {
@@ -483,6 +486,9 @@ export type Database = {
           marked_at?: string | null
           marked_by?: string | null
           notes?: string | null
+          parent_approved?: boolean | null
+          parent_id?: string | null
+          parent_response_date?: string | null
           student_id: string
         }
         Update: {
@@ -493,6 +499,9 @@ export type Database = {
           marked_at?: string | null
           marked_by?: string | null
           notes?: string | null
+          parent_approved?: boolean | null
+          parent_id?: string | null
+          parent_response_date?: string | null
           student_id?: string
         }
         Relationships: [
@@ -501,6 +510,13 @@ export type Database = {
             columns: ["holiday_id"]
             isOneToOne: false
             referencedRelation: "holidays"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "holiday_attendance_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "parents"
             referencedColumns: ["id"]
           },
           {

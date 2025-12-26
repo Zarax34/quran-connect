@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Plus, Trash2, Calendar, Loader2, Eye, Check, X } from "lucide-react";
+import { Plus, Trash2, Calendar, Loader2, Eye, Check, X, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -56,6 +56,8 @@ interface StudentAttendance {
   halqa_name: string;
   attended: boolean;
   notes: string | null;
+  parent_approved: boolean | null;
+  parent_name?: string;
 }
 
 export const HolidaysManagement = () => {
@@ -162,10 +164,13 @@ export const HolidaysManagement = () => {
 
       if (studentsError) throw studentsError;
 
-      // Fetch attendance records for this holiday
+      // Fetch attendance records for this holiday with parent info
       const { data: attendanceRecords, error: attendanceError } = await supabase
         .from("holiday_attendance")
-        .select("*")
+        .select(`
+          *,
+          parents (full_name)
+        `)
         .eq("holiday_id", holiday.id);
 
       if (attendanceError) throw attendanceError;
@@ -174,7 +179,7 @@ export const HolidaysManagement = () => {
       const attendanceList: StudentAttendance[] = (studentsData || []).map((student) => {
         const halqa = holiday.halaqat.find((h) => h.id === student.halqa_id);
         const attendanceRecord = attendanceRecords?.find(
-          (a) => a.student_id === student.id
+          (a: any) => a.student_id === student.id
         );
 
         return {
@@ -184,6 +189,8 @@ export const HolidaysManagement = () => {
           halqa_name: halqa?.name || "",
           attended: attendanceRecord?.attended || false,
           notes: attendanceRecord?.notes || null,
+          parent_approved: attendanceRecord?.parent_approved ?? null,
+          parent_name: (attendanceRecord as any)?.parents?.full_name || undefined,
         };
       });
 
@@ -540,14 +547,22 @@ export const HolidaysManagement = () => {
           ) : (
             <div className="space-y-4 mt-4">
               {/* Summary */}
-              <div className="flex gap-4 justify-center">
+              <div className="flex gap-3 justify-center flex-wrap">
                 <div className="bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-4 py-2 rounded-lg text-center">
-                  <div className="text-2xl font-bold">{attendedCount}</div>
-                  <div className="text-sm">حضروا</div>
+                  <div className="text-2xl font-bold">{attendanceData.filter(a => a.parent_approved === true).length}</div>
+                  <div className="text-sm">موافق عليهم</div>
                 </div>
                 <div className="bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 px-4 py-2 rounded-lg text-center">
-                  <div className="text-2xl font-bold">{notAttendedCount}</div>
-                  <div className="text-sm">لم يحضروا</div>
+                  <div className="text-2xl font-bold">{attendanceData.filter(a => a.parent_approved === false).length}</div>
+                  <div className="text-sm">مرفوضين</div>
+                </div>
+                <div className="bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 px-4 py-2 rounded-lg text-center">
+                  <div className="text-2xl font-bold">{attendanceData.filter(a => a.parent_approved === null).length}</div>
+                  <div className="text-sm">في الانتظار</div>
+                </div>
+                <div className="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-4 py-2 rounded-lg text-center">
+                  <div className="text-2xl font-bold">{attendedCount}</div>
+                  <div className="text-sm">حضروا</div>
                 </div>
               </div>
 
@@ -561,7 +576,8 @@ export const HolidaysManagement = () => {
                     <TableRow>
                       <TableHead className="text-right">اسم الطالب</TableHead>
                       <TableHead className="text-right">الحلقة</TableHead>
-                      <TableHead className="text-center">الحالة</TableHead>
+                      <TableHead className="text-center">موافقة ولي الأمر</TableHead>
+                      <TableHead className="text-center">الحضور</TableHead>
                       <TableHead className="text-center">تسجيل الحضور</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -573,13 +589,31 @@ export const HolidaysManagement = () => {
                         </TableCell>
                         <TableCell>{student.halqa_name}</TableCell>
                         <TableCell className="text-center">
+                          {student.parent_approved === true ? (
+                            <span className="inline-flex items-center gap-1 text-green-600">
+                              <Check className="w-4 h-4" />
+                              موافق
+                            </span>
+                          ) : student.parent_approved === false ? (
+                            <span className="inline-flex items-center gap-1 text-red-600">
+                              <X className="w-4 h-4" />
+                              مرفوض
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-yellow-600">
+                              <Clock className="w-4 h-4" />
+                              في الانتظار
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-center">
                           {student.attended ? (
                             <span className="inline-flex items-center gap-1 text-green-600">
                               <Check className="w-4 h-4" />
                               حضر
                             </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1 text-red-600">
+                            <span className="inline-flex items-center gap-1 text-muted-foreground">
                               <X className="w-4 h-4" />
                               لم يحضر
                             </span>
@@ -590,6 +624,7 @@ export const HolidaysManagement = () => {
                             size="sm"
                             variant={student.attended ? "destructive" : "default"}
                             onClick={() => toggleAttendance(student.student_id, !student.attended)}
+                            disabled={student.parent_approved === false}
                           >
                             {student.attended ? "إلغاء الحضور" : "تسجيل حضور"}
                           </Button>
