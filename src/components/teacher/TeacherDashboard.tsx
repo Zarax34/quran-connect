@@ -4,17 +4,26 @@ import {
   Bell, 
   Settings,
   Users,
-  BookOpen,
   LogOut,
   Loader2,
   LayoutDashboard,
   CheckCircle,
   XCircle,
-  Clock
+  Clock,
+  Eye
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -34,8 +43,24 @@ interface Report {
   halqa_id: string;
   report_date: string;
   status: string;
+  teacher_id?: string;
   halqa?: { name: string; center_id: string };
   teacher?: { full_name: string };
+}
+
+interface ReportEntry {
+  id: string;
+  student_id: string;
+  attendance_status: string;
+  notes: string | null;
+  student?: { full_name: string };
+  recitations?: {
+    surah: string;
+    from_ayah: number;
+    to_ayah: number;
+    type: string;
+    grade: number | null;
+  }[];
 }
 
 export const TeacherDashboard = () => {
@@ -49,6 +74,17 @@ export const TeacherDashboard = () => {
   const [pendingReports, setPendingReports] = useState<Report[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isReviewing, setIsReviewing] = useState<string | null>(null);
+  
+  // Rejection dialog state
+  const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
+  const [rejectingReport, setRejectingReport] = useState<Report | null>(null);
+  const [rejectionNote, setRejectionNote] = useState("");
+  
+  // View details dialog state
+  const [viewDetailsOpen, setViewDetailsOpen] = useState(false);
+  const [selectedReport, setSelectedReport] = useState<Report | null>(null);
+  const [reportEntries, setReportEntries] = useState<ReportEntry[]>([]);
+  const [loadingDetails, setLoadingDetails] = useState(false);
   
   const isCommunicationOfficer = roles.some(r => r.role === "communication_officer");
 
@@ -143,7 +179,83 @@ export const TeacherDashboard = () => {
     window.location.reload();
   };
 
-  const handleReviewReport = async (reportId: string, approved: boolean) => {
+  const handleViewDetails = async (report: Report) => {
+    setSelectedReport(report);
+    setViewDetailsOpen(true);
+    setLoadingDetails(true);
+    
+    try {
+      // Fetch report entries with students
+      const { data: entries } = await supabase
+        .from("report_entries")
+        .select("*, student:students(full_name)")
+        .eq("report_id", report.id);
+      
+      if (entries) {
+        // Fetch recitations for each entry
+        const entriesWithRecitations = await Promise.all(
+          entries.map(async (entry) => {
+            const { data: recitations } = await supabase
+              .from("recitations")
+              .select("surah, from_ayah, to_ayah, type, grade")
+              .eq("report_entry_id", entry.id);
+            
+            return {
+              ...entry,
+              recitations: recitations || []
+            };
+          })
+        );
+        setReportEntries(entriesWithRecitations);
+      }
+    } catch (error) {
+      console.error("Error fetching report details:", error);
+      toast.error("خطأ في جلب تفاصيل التقرير");
+    } finally {
+      setLoadingDetails(false);
+    }
+  };
+
+  const openRejectDialog = (report: Report) => {
+    setRejectingReport(report);
+    setRejectionNote("");
+    setRejectDialogOpen(true);
+  };
+
+  const handleRejectWithNote = async () => {
+    if (!rejectingReport) return;
+    
+    setIsReviewing(rejectingReport.id);
+    try {
+      const { error } = await supabase.functions.invoke("admin-operations", {
+        body: {
+          operation: "update",
+          table: "reports",
+          id: rejectingReport.id,
+          data: {
+            status: "rejected",
+            reviewer_id: user?.id,
+            review_notes: rejectionNote || null,
+          },
+        },
+      });
+
+      if (error) throw error;
+      
+      toast.success("تم رفض التقرير");
+      setRejectDialogOpen(false);
+      setRejectingReport(null);
+      setRejectionNote("");
+      fetchDashboardData();
+    } catch (error) {
+      console.error("Error rejecting report:", error);
+      toast.error("خطأ في رفض التقرير");
+    } finally {
+      setIsReviewing(null);
+    }
+  };
+
+  const handleApproveReport = async (reportId: string) => {
     setIsReviewing(reportId);
     try {
       const { error } = await supabase.functions.invoke("admin-operations", {
@@ -152,7 +264,7 @@ export const TeacherDashboard = () => {
           table: "reports",
           id: reportId,
           data: {
-            status: approved ? "approved" : "rejected",
+            status: "approved",
             reviewer_id: user?.id,
           },
         },
@@ -160,13 +272,33 @@ export const TeacherDashboard = () => {
 
       if (error) throw error;
       
-      toast.success(approved ? "تم اعتماد التقرير" : "تم رفض التقرير");
+      toast.success("تم اعتماد التقرير");
       fetchDashboardData();
     } catch (error) {
-      console.error("Error reviewing report:", error);
-      toast.error("خطأ في مراجعة التقرير");
+      console.error("Error approving report:", error);
+      toast.error("خطأ في اعتماد التقرير");
     } finally {
       setIsReviewing(null);
+    }
+  };
+
+  const getAttendanceLabel = (status: string) => {
+    switch (status) {
+      case "present": return "حاضر";
+      case "absent": return "غائب";
+      case "absent_with_permission": return "غائب بإذن";
+      case "escaped": return "هارب";
+      default: return status;
+    }
+  };
+
+  const getRecitationTypeLabel = (type: string) => {
+    switch (type) {
+      case "new_memorization": return "حفظ جديد";
+      case "review": return "مراجعة";
+      case "recitation": return "تلاوة";
+      case "talqeen": return "تلقين";
+      default: return type;
     }
   };
 
@@ -211,22 +343,33 @@ export const TeacherDashboard = () => {
               <div className="space-y-3">
                 {pendingReports.map((report) => (
                   <Card key={report.id} className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h3 className="font-medium">{report.halqa?.name || "حلقة غير معروفة"}</h3>
-                        <p className="text-sm text-muted-foreground">
-                          المعلم: {report.teacher?.full_name || "غير معروف"}
-                        </p>
-                        <p className="text-sm text-muted-foreground">
-                          {new Date(report.report_date).toLocaleDateString("ar-SA")}
-                        </p>
+                    <div className="space-y-3">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <h3 className="font-medium">{report.halqa?.name || "حلقة غير معروفة"}</h3>
+                          <p className="text-sm text-muted-foreground">
+                            المعلم: {report.teacher?.full_name || "غير معروف"}
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            {new Date(report.report_date).toLocaleDateString("ar-SA")}
+                          </p>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="gap-1"
+                          onClick={() => handleViewDetails(report)}
+                        >
+                          <Eye className="w-4 h-4" />
+                          التفاصيل
+                        </Button>
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 justify-end">
                         <Button
                           size="sm"
                           variant="outline"
                           className="gap-1 text-destructive hover:text-destructive"
-                          onClick={() => handleReviewReport(report.id, false)}
+                          onClick={() => openRejectDialog(report)}
                           disabled={isReviewing === report.id}
                         >
                           <XCircle className="w-4 h-4" />
@@ -235,10 +378,14 @@ export const TeacherDashboard = () => {
                         <Button
                           size="sm"
                           className="gap-1"
-                          onClick={() => handleReviewReport(report.id, true)}
+                          onClick={() => handleApproveReport(report.id)}
                           disabled={isReviewing === report.id}
                         >
-                          <CheckCircle className="w-4 h-4" />
+                          {isReviewing === report.id ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <CheckCircle className="w-4 h-4" />
+                          )}
                           اعتماد
                         </Button>
                       </div>
@@ -408,6 +555,113 @@ export const TeacherDashboard = () => {
           ))}
         </div>
       </nav>
+
+      {/* Rejection Dialog */}
+      <Dialog open={rejectDialogOpen} onOpenChange={setRejectDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>رفض التقرير</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <p className="text-sm text-muted-foreground">
+                الحلقة: {rejectingReport?.halqa?.name}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                المعلم: {rejectingReport?.teacher?.full_name}
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label>سبب الرفض (اختياري)</Label>
+              <Textarea
+                placeholder="أدخل سبب رفض التقرير..."
+                value={rejectionNote}
+                onChange={(e) => setRejectionNote(e.target.value)}
+                className="h-24"
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setRejectDialogOpen(false)}>
+              إلغاء
+            </Button>
+            <Button 
+              variant="destructive" 
+              onClick={handleRejectWithNote}
+              disabled={isReviewing === rejectingReport?.id}
+            >
+              {isReviewing === rejectingReport?.id ? (
+                <Loader2 className="w-4 h-4 animate-spin ml-2" />
+              ) : null}
+              تأكيد الرفض
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* View Details Dialog */}
+      <Dialog open={viewDetailsOpen} onOpenChange={setViewDetailsOpen}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>تفاصيل التقرير</DialogTitle>
+          </DialogHeader>
+          {loadingDetails ? (
+            <div className="py-8 text-center">
+              <Loader2 className="w-8 h-8 animate-spin mx-auto text-primary" />
+              <p className="text-muted-foreground mt-2">جاري التحميل...</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="bg-muted/50 p-3 rounded-lg">
+                <p><strong>الحلقة:</strong> {selectedReport?.halqa?.name}</p>
+                <p><strong>المعلم:</strong> {selectedReport?.teacher?.full_name}</p>
+                <p><strong>التاريخ:</strong> {selectedReport?.report_date && new Date(selectedReport.report_date).toLocaleDateString("ar-SA")}</p>
+              </div>
+              
+              <div className="space-y-3">
+                <h4 className="font-medium">الطلاب ({reportEntries.length})</h4>
+                {reportEntries.map((entry) => (
+                  <Card key={entry.id} className="p-3">
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium">{entry.student?.full_name}</span>
+                        <Badge variant={entry.attendance_status === "present" ? "default" : "secondary"}>
+                          {getAttendanceLabel(entry.attendance_status)}
+                        </Badge>
+                      </div>
+                      {entry.notes && (
+                        <p className="text-sm text-muted-foreground">
+                          ملاحظات: {entry.notes}
+                        </p>
+                      )}
+                      {entry.recitations && entry.recitations.length > 0 && (
+                        <div className="mt-2 space-y-1">
+                          <p className="text-sm font-medium">التسميع:</p>
+                          {entry.recitations.map((rec, idx) => (
+                            <div key={idx} className="text-sm bg-muted/50 p-2 rounded flex justify-between">
+                              <span>
+                                {rec.surah} ({rec.from_ayah} - {rec.to_ayah})
+                              </span>
+                              <span className="flex gap-2">
+                                <Badge variant="outline" className="text-xs">
+                                  {getRecitationTypeLabel(rec.type)}
+                                </Badge>
+                                {rec.grade !== null && (
+                                  <Badge className="text-xs">{rec.grade}/10</Badge>
+                                )}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
