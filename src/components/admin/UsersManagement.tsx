@@ -37,6 +37,9 @@ interface Center {
   name: string;
 }
 
+// Only admin/staff roles - exclude parent and student
+const ADMIN_ROLES: AppRole[] = ["super_admin", "center_admin", "teacher", "communication_officer"];
+
 const ROLE_LABELS: Record<AppRole, string> = {
   super_admin: "مسؤول النظام",
   center_admin: "مدير مركز",
@@ -78,10 +81,11 @@ export const UsersManagement = () => {
 
   const fetchUsers = async () => {
     try {
-      // First get all user roles
+      // First get all user roles - filter out parent and student roles
       const { data: rolesData, error: rolesError } = await supabase
         .from("user_roles")
-        .select("user_id, role, center_id");
+        .select("user_id, role, center_id")
+        .in("role", ADMIN_ROLES);
 
       if (rolesError) throw rolesError;
 
@@ -263,9 +267,9 @@ export const UsersManagement = () => {
                     <SelectValue placeholder="اختر الصلاحية" />
                   </SelectTrigger>
                   <SelectContent>
-                    {Object.entries(ROLE_LABELS).map(([value, label]) => (
-                      <SelectItem key={value} value={value}>
-                        {label}
+                    {ADMIN_ROLES.map((role) => (
+                      <SelectItem key={role} value={role}>
+                        {ROLE_LABELS[role]}
                       </SelectItem>
                     ))}
                   </SelectContent>
