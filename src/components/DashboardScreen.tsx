@@ -40,6 +40,7 @@ import { ParentDashboard } from "./parent/ParentDashboard";
 import { StudentDashboard } from "./student/StudentDashboard";
 import { StudentAccountsList } from "./admin/StudentAccountsList";
 import { ParentAccountsList } from "./admin/ParentAccountsList";
+import { UserSettings } from "./settings/UserSettings";
 
 type TabType = "home" | "students" | "reports" | "notifications" | "settings";
 type AdminView = "dashboard" | "centers" | "students" | "halaqat" | "users" | "announcements" | "parents" | "courses" | "activities" | "reports" | "student-accounts" | "parent-accounts";
@@ -310,7 +311,8 @@ export const DashboardScreen = () => {
         return (
           <div className="space-y-4">
             <h2 className="text-xl font-bold text-foreground">الإعدادات</h2>
-            <Card className="p-4 space-y-4">
+            <UserSettings />
+            <Card className="p-4">
               <div className="flex items-center justify-between">
                 <span className="text-foreground">تسجيل الخروج</span>
                 <Button variant="destructive" onClick={handleSignOut} className="gap-2">
