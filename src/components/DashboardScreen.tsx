@@ -42,9 +42,10 @@ import { TeacherDashboard } from "./teacher/TeacherDashboard";
 import { StudentAccountsList } from "./admin/StudentAccountsList";
 import { ParentAccountsList } from "./admin/ParentAccountsList";
 import { UserSettings } from "./settings/UserSettings";
+import { StaffAccountsList } from "./admin/StaffAccountsList";
 
 type TabType = "home" | "students" | "reports" | "notifications" | "settings";
-type AdminView = "dashboard" | "centers" | "students" | "halaqat" | "users" | "announcements" | "parents" | "courses" | "activities" | "reports" | "student-accounts" | "parent-accounts";
+type AdminView = "dashboard" | "centers" | "students" | "halaqat" | "users" | "announcements" | "parents" | "courses" | "activities" | "reports" | "student-accounts" | "parent-accounts" | "staff-accounts";
 
 interface Stats {
   totalStudents: number;
@@ -160,6 +161,7 @@ export const DashboardScreen = () => {
     { label: "حسابات الطلاب", icon: UserCheck, view: "student-accounts" as AdminView },
     { label: "أولياء الأمور", icon: UserCheck, view: "parents" as AdminView },
     { label: "حسابات أولياء الأمور", icon: UserCog, view: "parent-accounts" as AdminView },
+    { label: "حسابات المعلمين", icon: GraduationCap, view: "staff-accounts" as AdminView },
     { label: "الدورات", icon: GraduationCap, view: "courses" as AdminView },
     { label: "الأنشطة", icon: Activity, view: "activities" as AdminView },
     { label: "الإعلانات", icon: Bell, view: "announcements" as AdminView },
@@ -291,6 +293,7 @@ export const DashboardScreen = () => {
               {adminView === "reports" && "التقارير اليومية"}
               {adminView === "student-accounts" && "حسابات الطلاب"}
               {adminView === "parent-accounts" && "حسابات أولياء الأمور"}
+              {adminView === "staff-accounts" && "حسابات المعلمين ومسؤولي التواصل"}
             </h1>
           </div>
         </header>
@@ -306,6 +309,7 @@ export const DashboardScreen = () => {
           {adminView === "reports" && <DailyReports />}
           {adminView === "student-accounts" && <StudentAccountsList />}
           {adminView === "parent-accounts" && <ParentAccountsList />}
+          {adminView === "staff-accounts" && <StaffAccountsList />}
         </main>
       </div>
     );
