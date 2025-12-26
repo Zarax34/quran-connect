@@ -38,6 +38,7 @@ import { ActivitiesManagement } from "./admin/ActivitiesManagement";
 import { DailyReports } from "./teacher/DailyReports";
 import { ParentDashboard } from "./parent/ParentDashboard";
 import { StudentDashboard } from "./student/StudentDashboard";
+import { TeacherDashboard } from "./teacher/TeacherDashboard";
 import { StudentAccountsList } from "./admin/StudentAccountsList";
 import { ParentAccountsList } from "./admin/ParentAccountsList";
 import { UserSettings } from "./settings/UserSettings";
@@ -75,6 +76,8 @@ export const DashboardScreen = () => {
   
   const isParent = roles.some(r => r.role === "parent");
   const isStudent = roles.some(r => r.role === "student");
+  const isTeacher = roles.some(r => r.role === "teacher");
+  const isCommunicationOfficer = roles.some(r => r.role === "communication_officer");
   const isAdmin = isSuperAdmin || roles.some(r => r.role === "center_admin");
 
   useEffect(() => {
@@ -247,6 +250,11 @@ export const DashboardScreen = () => {
         </main>
       </div>
     );
+  }
+
+  // Render Teacher/Communication Officer Dashboard
+  if ((isTeacher || isCommunicationOfficer) && !isAdmin) {
+    return <TeacherDashboard />;
   }
 
   // Render admin sub-views
