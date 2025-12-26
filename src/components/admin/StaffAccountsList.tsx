@@ -176,7 +176,7 @@ export const StaffAccountsList = () => {
       if (data?.error) throw new Error(data.error);
 
       // If teacher and halqa selected, assign the halqa to this teacher
-      if (formData.role === "teacher" && formData.halqaId && data?.userId) {
+      if (formData.role === "teacher" && formData.halqaId && formData.halqaId !== "none" && data?.userId) {
         const { error: halqaError } = await supabase
           .from("halaqat")
           .update({ teacher_id: data.userId })
@@ -334,7 +334,7 @@ export const StaffAccountsList = () => {
                       <SelectValue placeholder="اختر الحلقة" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">بدون حلقة</SelectItem>
+                      <SelectItem value="none">بدون حلقة</SelectItem>
                       {halaqat
                         .filter(h => !h.teacher_id)
                         .map((halqa) => (
