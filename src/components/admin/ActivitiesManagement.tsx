@@ -29,7 +29,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Edit, Trash2, Search, CheckCircle, XCircle, Clock } from "lucide-react";
+import { Plus, Edit, Trash2, Search, CheckCircle, XCircle, Clock, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
@@ -84,8 +84,10 @@ export const ActivitiesManagement = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isApprovalDialogOpen, setIsApprovalDialogOpen] = useState(false);
+  const [isPreviewDialogOpen, setIsPreviewDialogOpen] = useState(false);
   const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
   const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null);
+  const [previewActivity, setPreviewActivity] = useState<Activity | null>(null);
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -270,6 +272,16 @@ export const ActivitiesManagement = () => {
     setIsApprovalDialogOpen(true);
   };
 
+  const openPreviewDialog = (activity: Activity) => {
+    setPreviewActivity(activity);
+    setIsPreviewDialogOpen(true);
+  };
+
+  const getPreviewApprovals = () => {
+    if (!previewActivity) return [];
+    return approvals.filter((a) => a.activity_id === previewActivity.id);
+  };
+
   const resetForm = () => {
     setFormData({ name: "", description: "", start_date: "", end_date: "", location: "", requires_approval: true, center_id: selectedCenterId || "" });
     setEditingActivity(null);
@@ -394,9 +406,14 @@ export const ActivitiesManagement = () => {
                       <TableCell>
                         <div className="flex items-center justify-center gap-1">
                           {activity.requires_approval && (
-                            <Button variant="ghost" size="icon" onClick={() => openApprovalDialog(activity)} title="طلب موافقة">
-                              <CheckCircle className="h-4 w-4" />
-                            </Button>
+                            <>
+                              <Button variant="ghost" size="icon" onClick={() => openPreviewDialog(activity)} title="معاينة">
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                              <Button variant="ghost" size="icon" onClick={() => openApprovalDialog(activity)} title="طلب موافقة">
+                                <CheckCircle className="h-4 w-4" />
+                              </Button>
+                            </>
                           )}
                           <Button variant="ghost" size="icon" onClick={() => openEditDialog(activity)}><Edit className="h-4 w-4" /></Button>
                           <Button variant="ghost" size="icon" onClick={() => handleDelete(activity.id)} className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4" /></Button>
@@ -433,6 +450,84 @@ export const ActivitiesManagement = () => {
                 <Button type="button" variant="outline" onClick={() => setIsApprovalDialogOpen(false)} className="flex-1">إلغاء</Button>
               </div>
             </form>
+          </DialogContent>
+        </Dialog>
+
+        {/* Preview Dialog */}
+        <Dialog open={isPreviewDialogOpen} onOpenChange={setIsPreviewDialogOpen}>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="text-foreground">معاينة الموافقات - {previewActivity?.name}</DialogTitle>
+            </DialogHeader>
+            
+            {(() => {
+              const previewApprovals = getPreviewApprovals();
+              const approvedCount = previewApprovals.filter((a) => a.approved === true).length;
+              const rejectedCount = previewApprovals.filter((a) => a.approved === false).length;
+              const pendingCount = previewApprovals.filter((a) => a.approved === null).length;
+
+              return (
+                <div className="space-y-4 mt-4">
+                  {/* Summary */}
+                  <div className="flex gap-3 justify-center flex-wrap">
+                    <div className="bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-4 py-2 rounded-lg text-center">
+                      <div className="text-2xl font-bold">{approvedCount}</div>
+                      <div className="text-sm">موافق</div>
+                    </div>
+                    <div className="bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 px-4 py-2 rounded-lg text-center">
+                      <div className="text-2xl font-bold">{rejectedCount}</div>
+                      <div className="text-sm">مرفوض</div>
+                    </div>
+                    <div className="bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 px-4 py-2 rounded-lg text-center">
+                      <div className="text-2xl font-bold">{pendingCount}</div>
+                      <div className="text-sm">في الانتظار</div>
+                    </div>
+                  </div>
+
+                  {previewApprovals.length === 0 ? (
+                    <p className="text-center text-muted-foreground py-4">
+                      لا توجد طلبات موافقة لهذا النشاط
+                    </p>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="text-right">اسم الطالب</TableHead>
+                          <TableHead className="text-right">ولي الأمر</TableHead>
+                          <TableHead className="text-center">حالة الموافقة</TableHead>
+                          <TableHead className="text-right">تاريخ الرد</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {previewApprovals.map((approval) => {
+                          const status = getApprovalStatus(approval.approved);
+                          const StatusIcon = status.icon;
+                          return (
+                            <TableRow key={approval.id}>
+                              <TableCell className="font-medium">
+                                {approval.student?.full_name || "-"}
+                              </TableCell>
+                              <TableCell>{approval.parent?.full_name || "-"}</TableCell>
+                              <TableCell className="text-center">
+                                <span className={`inline-flex items-center gap-1 ${status.color}`}>
+                                  <StatusIcon className="w-4 h-4" />
+                                  {status.label}
+                                </span>
+                              </TableCell>
+                              <TableCell>
+                                {approval.response_date
+                                  ? format(new Date(approval.response_date), "d MMM yyyy", { locale: ar })
+                                  : "-"}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  )}
+                </div>
+              );
+            })()}
           </DialogContent>
         </Dialog>
       </CardContent>
