@@ -1,24 +1,77 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
 interface PushToken {
   token: string;
   platform: 'ios' | 'android' | 'web';
+  device_id?: string;
 }
 
 export const usePushNotifications = (userId: string | undefined) => {
-  
+  const [isRegistered, setIsRegistered] = useState(false);
+
   // Save push token to database
   const savePushToken = useCallback(async (tokenData: PushToken) => {
     if (!userId) return false;
 
     try {
-      // For now, we'll store the token in the user's metadata or a separate table
-      // This can be enhanced when Capacitor push notifications are fully integrated
-      console.log('Push token saved:', tokenData);
+      // Check if token already exists
+      const { data: existingToken } = await supabase
+        .from('push_tokens')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('token', tokenData.token)
+        .maybeSingle();
+
+      if (existingToken) {
+        // Update existing token to active
+        const { error } = await supabase
+          .from('push_tokens')
+          .update({ is_active: true, updated_at: new Date().toISOString() })
+          .eq('id', existingToken.id);
+
+        if (error) throw error;
+        console.log('Push token updated successfully');
+      } else {
+        // Insert new token
+        const { error } = await supabase
+          .from('push_tokens')
+          .insert({
+            user_id: userId,
+            token: tokenData.token,
+            platform: tokenData.platform,
+            device_id: tokenData.device_id,
+            is_active: true
+          });
+
+        if (error) throw error;
+        console.log('Push token saved successfully');
+      }
+
+      setIsRegistered(true);
       return true;
     } catch (error) {
       console.error('Error saving push token:', error);
+      return false;
+    }
+  }, [userId]);
+
+  // Remove push token from database
+  const removePushToken = useCallback(async (token: string) => {
+    if (!userId) return false;
+
+    try {
+      const { error } = await supabase
+        .from('push_tokens')
+        .update({ is_active: false })
+        .eq('user_id', userId)
+        .eq('token', token);
+
+      if (error) throw error;
+      setIsRegistered(false);
+      return true;
+    } catch (error) {
+      console.error('Error removing push token:', error);
       return false;
     }
   }, [userId]);
@@ -37,28 +90,27 @@ export const usePushNotifications = (userId: string | undefined) => {
     }
   }, []);
 
-  // Register for push notifications
+  // Register for push notifications (for native apps via Capacitor)
   const registerForPushNotifications = useCallback(async () => {
     const permissionGranted = await requestPermission();
     
     if (permissionGranted) {
-      // In a Capacitor app, this would use the PushNotifications plugin
-      // For web, we can use service workers
       console.log('Push notifications permission granted');
       
-      // Placeholder for actual token registration
-      const mockToken: PushToken = {
-        token: 'web-push-token-placeholder',
+      // For web, we use a placeholder token
+      // In Capacitor native apps, this would be replaced with actual FCM token
+      const webToken: PushToken = {
+        token: `web-${userId}-${Date.now()}`,
         platform: 'web'
       };
       
-      await savePushToken(mockToken);
+      await savePushToken(webToken);
     }
     
     return permissionGranted;
-  }, [requestPermission, savePushToken]);
+  }, [requestPermission, savePushToken, userId]);
 
-  // Subscribe to realtime notifications
+  // Subscribe to realtime notifications for in-app display
   useEffect(() => {
     if (!userId) return;
 
@@ -79,7 +131,8 @@ export const usePushNotifications = (userId: string | undefined) => {
           if ('Notification' in window && Notification.permission === 'granted') {
             new Notification(notification.title, {
               body: notification.content,
-              icon: '/favicon.ico'
+              icon: '/favicon.ico',
+              tag: notification.id,
             });
           }
         }
@@ -92,8 +145,10 @@ export const usePushNotifications = (userId: string | undefined) => {
   }, [userId]);
 
   return {
+    isRegistered,
     requestPermission,
     registerForPushNotifications,
-    savePushToken
+    savePushToken,
+    removePushToken
   };
 };
