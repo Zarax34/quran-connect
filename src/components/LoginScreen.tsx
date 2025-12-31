@@ -75,7 +75,7 @@ export const LoginScreen = ({ onLogin, onBack, centerName, centerId }: Props) =>
     setIsLoading(true);
 
     try {
-      const { error } = await signIn(identifier, password);
+      const { error } = await signIn(identifier, password, centerId);
       
       if (error) {
         if (error.message.includes("Invalid login credentials")) {
@@ -124,7 +124,8 @@ export const LoginScreen = ({ onLogin, onBack, centerName, centerId }: Props) =>
       // Login with stored credentials
       const { error } = await signIn(
         storedCredentials.identifier, 
-        storedCredentials.password
+        storedCredentials.password,
+        centerId
       );
       
       if (error) {

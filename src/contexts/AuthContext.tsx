@@ -27,7 +27,7 @@ interface AuthContextType {
   setSelectedCenterId: (centerId: string | null) => void;
   isLoading: boolean;
   isSuperAdmin: boolean;
-  signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
+  signIn: (email: string, password: string, centerId?: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   hasRole: (role: AppRole) => boolean;
   canAccessCenter: (centerId: string) => boolean;
@@ -120,23 +120,11 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     return () => subscription.unsubscribe();
   }, []);
 
-  const signIn = async (identifier: string, password: string) => {
-    // Check if identifier is an email
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    
-    if (emailRegex.test(identifier)) {
-      // Direct email login
-      const { error } = await supabase.auth.signInWithPassword({
-        email: identifier,
-        password,
-      });
-      return { error };
-    }
-    
-    // Login by name - use edge function to bypass RLS
+  const signIn = async (identifier: string, password: string, centerId?: string) => {
+    // Always use edge function for center validation
     try {
       const { data, error } = await supabase.functions.invoke('login-by-name', {
-        body: { identifier, password }
+        body: { identifier, password, centerId }
       });
       
       if (error || data?.error) {
