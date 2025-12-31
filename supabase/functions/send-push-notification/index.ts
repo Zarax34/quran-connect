@@ -14,6 +14,94 @@ interface PushNotificationPayload {
   data?: Record<string, string>;
 }
 
+interface ServiceAccount {
+  type: string;
+  project_id: string;
+  private_key_id: string;
+  private_key: string;
+  client_email: string;
+  client_id: string;
+  auth_uri: string;
+  token_uri: string;
+}
+
+// Generate JWT for Google OAuth2
+async function createJWT(serviceAccount: ServiceAccount): Promise<string> {
+  const header = {
+    alg: 'RS256',
+    typ: 'JWT',
+  };
+
+  const now = Math.floor(Date.now() / 1000);
+  const payload = {
+    iss: serviceAccount.client_email,
+    scope: 'https://www.googleapis.com/auth/firebase.messaging',
+    aud: serviceAccount.token_uri,
+    iat: now,
+    exp: now + 3600,
+  };
+
+  const encoder = new TextEncoder();
+  const headerB64 = btoa(JSON.stringify(header)).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+  const payloadB64 = btoa(JSON.stringify(payload)).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+  const unsignedToken = `${headerB64}.${payloadB64}`;
+
+  // Import private key and sign
+  const privateKeyPem = serviceAccount.private_key;
+  const pemContents = privateKeyPem
+    .replace('-----BEGIN PRIVATE KEY-----', '')
+    .replace('-----END PRIVATE KEY-----', '')
+    .replace(/\n/g, '');
+  
+  const binaryKey = Uint8Array.from(atob(pemContents), c => c.charCodeAt(0));
+  
+  const cryptoKey = await crypto.subtle.importKey(
+    'pkcs8',
+    binaryKey,
+    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+
+  const signature = await crypto.subtle.sign(
+    'RSASSA-PKCS1-v1_5',
+    cryptoKey,
+    encoder.encode(unsignedToken)
+  );
+
+  const signatureB64 = btoa(String.fromCharCode(...new Uint8Array(signature)))
+    .replace(/=/g, '')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_');
+
+  return `${unsignedToken}.${signatureB64}`;
+}
+
+// Get OAuth2 access token
+async function getAccessToken(serviceAccount: ServiceAccount): Promise<string> {
+  const jwt = await createJWT(serviceAccount);
+
+  const response = await fetch(serviceAccount.token_uri, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: new URLSearchParams({
+      grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+      assertion: jwt,
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    console.error('Failed to get access token:', error);
+    throw new Error(`Failed to get access token: ${error}`);
+  }
+
+  const data = await response.json();
+  return data.access_token;
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -23,16 +111,17 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const firebaseServerKey = Deno.env.get('FIREBASE_SERVER_KEY');
+    const serviceAccountJson = Deno.env.get('FIREBASE_SERVICE_ACCOUNT');
 
-    if (!firebaseServerKey) {
-      console.error('FIREBASE_SERVER_KEY not configured');
+    if (!serviceAccountJson) {
+      console.error('FIREBASE_SERVICE_ACCOUNT not configured');
       return new Response(
-        JSON.stringify({ error: 'Firebase server key not configured' }),
+        JSON.stringify({ error: 'Firebase service account not configured' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
+    const serviceAccount: ServiceAccount = JSON.parse(serviceAccountJson);
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     const payload: PushNotificationPayload = await req.json();
 
@@ -76,50 +165,71 @@ serve(async (req) => {
 
     console.log(`Found ${tokens.length} push tokens to notify`);
 
-    // Send notifications via FCM
+    // Get OAuth2 access token
+    const accessToken = await getAccessToken(serviceAccount);
+    const fcmUrl = `https://fcm.googleapis.com/v1/projects/${serviceAccount.project_id}/messages:send`;
+
+    // Send notifications via FCM v1 API
     const fcmResults = await Promise.allSettled(
       tokens.map(async ({ token, platform }) => {
         const fcmPayload = {
-          to: token,
-          notification: {
-            title: payload.title,
-            body: payload.body,
-            sound: 'default',
-            badge: 1,
+          message: {
+            token: token,
+            notification: {
+              title: payload.title,
+              body: payload.body,
+            },
+            data: payload.data || {},
+            android: {
+              priority: 'high',
+              notification: {
+                sound: 'default',
+              },
+            },
+            apns: {
+              payload: {
+                aps: {
+                  sound: 'default',
+                  badge: 1,
+                },
+              },
+            },
+            webpush: {
+              notification: {
+                icon: '/favicon.ico',
+              },
+            },
           },
-          data: payload.data || {},
-          priority: 'high',
         };
 
-        console.log(`Sending FCM notification to ${platform} device`);
+        console.log(`Sending FCM v1 notification to ${platform} device`);
 
-        const response = await fetch('https://fcm.googleapis.com/fcm/send', {
+        const response = await fetch(fcmUrl, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `key=${firebaseServerKey}`,
+            'Authorization': `Bearer ${accessToken}`,
           },
           body: JSON.stringify(fcmPayload),
         });
 
         const result = await response.json();
-        
-        if (!response.ok) {
-          console.error('FCM send error:', result);
-          throw new Error(`FCM error: ${JSON.stringify(result)}`);
-        }
 
-        // Check for invalid tokens and deactivate them
-        if (result.failure > 0 && result.results) {
-          for (const res of result.results) {
-            if (res.error === 'NotRegistered' || res.error === 'InvalidRegistration') {
-              console.log(`Deactivating invalid token: ${token.substring(0, 20)}...`);
-              await supabase
-                .from('push_tokens')
-                .update({ is_active: false })
-                .eq('token', token);
-            }
+        if (!response.ok) {
+          console.error('FCM v1 send error:', result);
+          
+          // Check for invalid token errors
+          if (result.error?.details?.some((d: any) => 
+            d.errorCode === 'UNREGISTERED' || d.errorCode === 'INVALID_ARGUMENT'
+          )) {
+            console.log(`Deactivating invalid token: ${token.substring(0, 20)}...`);
+            await supabase
+              .from('push_tokens')
+              .update({ is_active: false })
+              .eq('token', token);
           }
+          
+          throw new Error(`FCM error: ${JSON.stringify(result)}`);
         }
 
         return result;
