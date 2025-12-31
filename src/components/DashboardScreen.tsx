@@ -44,6 +44,7 @@ import { StudentAccountsList } from "./admin/StudentAccountsList";
 import { ParentAccountsList } from "./admin/ParentAccountsList";
 import { UserSettings } from "./settings/UserSettings";
 import { StaffAccountsList } from "./admin/StaffAccountsList";
+import { EmergencyNotification } from "./admin/EmergencyNotification";
 
 type TabType = "home" | "students" | "reports" | "notifications" | "settings";
 type AdminView = "dashboard" | "centers" | "students" | "halaqat" | "users" | "announcements" | "parents" | "courses" | "activities" | "holidays" | "reports" | "student-accounts" | "parent-accounts" | "staff-accounts";
@@ -392,6 +393,12 @@ export const DashboardScreen = () => {
                   </button>
                 ))}
               </div>
+            </section>
+
+            {/* Emergency Notification Section */}
+            <section>
+              <h2 className="text-lg font-semibold text-foreground mb-3">إشعارات سريعة</h2>
+              <EmergencyNotification />
             </section>
 
             {stats.totalStudents === 0 && (

@@ -24,9 +24,9 @@ serve(async (req) => {
       },
     });
 
-    const { identifier, password } = await req.json();
+    const { identifier, password, centerId } = await req.json();
 
-    console.log("Login attempt for:", identifier);
+    console.log("Login attempt for:", identifier, "at center:", centerId);
 
     if (!identifier || !password) {
       return new Response(
@@ -40,6 +40,7 @@ serve(async (req) => {
     // Check if identifier is an email
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     let email = trimmedIdentifier;
+    let userId: string | null = null;
 
     if (!emailRegex.test(trimmedIdentifier)) {
       // First, try to find by name in profiles with email
@@ -57,6 +58,7 @@ serve(async (req) => {
 
       if (matchedProfile?.email) {
         email = matchedProfile.email;
+        userId = matchedProfile.id;
         console.log("Found email in profile for user:", email);
       } else {
         // If not found in profiles.email, search in profiles by name and get auth user's email
@@ -71,6 +73,7 @@ serve(async (req) => {
         );
 
         if (profileMatch) {
+          userId = profileMatch.id;
           console.log("Found profile by name, looking up auth user:", profileMatch.id);
           
           // Get the user's email from auth.users using admin API
@@ -95,6 +98,58 @@ serve(async (req) => {
             { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         }
+      }
+    } else {
+      // Email login - find user by email
+      const { data: profileByEmail } = await supabaseAdmin
+        .from("profiles")
+        .select("id")
+        .eq("email", email)
+        .maybeSingle();
+      
+      if (profileByEmail) {
+        userId = profileByEmail.id;
+      } else {
+        // Try to find by auth user email
+        const { data: users } = await supabaseAdmin.auth.admin.listUsers();
+        const authUser = users?.users?.find(u => u.email === email);
+        if (authUser) {
+          userId = authUser.id;
+        }
+      }
+    }
+
+    // Check if user belongs to the selected center (if centerId is provided)
+    if (centerId && userId) {
+      const { data: userRoles } = await supabaseAdmin
+        .from("user_roles")
+        .select("role, center_id")
+        .eq("user_id", userId);
+
+      console.log("User roles:", userRoles);
+
+      if (userRoles && userRoles.length > 0) {
+        // Check if user is super_admin (can access any center)
+        const isSuperAdmin = userRoles.some(r => r.role === "super_admin");
+        
+        if (!isSuperAdmin) {
+          // Check if user has a role in the selected center
+          const hasAccessToCenter = userRoles.some(r => r.center_id === centerId);
+          
+          if (!hasAccessToCenter) {
+            console.log("User does not have access to center:", centerId);
+            return new Response(
+              JSON.stringify({ error: "هذا الحساب غير مسجل في هذا المركز" }),
+              { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          }
+        }
+      } else {
+        console.log("No roles found for user");
+        return new Response(
+          JSON.stringify({ error: "هذا الحساب غير مسجل في أي مركز" }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
     }
 

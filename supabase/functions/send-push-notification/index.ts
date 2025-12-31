@@ -12,6 +12,7 @@ interface PushNotificationPayload {
   title: string;
   body: string;
   data?: Record<string, string>;
+  priority?: 'normal' | 'emergency';
 }
 
 interface ServiceAccount {
@@ -169,6 +170,9 @@ serve(async (req) => {
     const accessToken = await getAccessToken(serviceAccount);
     const fcmUrl = `https://fcm.googleapis.com/v1/projects/${serviceAccount.project_id}/messages:send`;
 
+    // Determine if this is an emergency notification
+    const isEmergency = payload.priority === 'emergency';
+    
     // Send notifications via FCM v1 API
     const fcmResults = await Promise.allSettled(
       tokens.map(async ({ token, platform }) => {
@@ -176,27 +180,41 @@ serve(async (req) => {
           message: {
             token: token,
             notification: {
-              title: payload.title,
+              title: isEmergency ? `🚨 ${payload.title}` : payload.title,
               body: payload.body,
             },
-            data: payload.data || {},
+            data: { 
+              ...(payload.data || {}),
+              priority: isEmergency ? 'emergency' : 'normal',
+            },
             android: {
               priority: 'high',
               notification: {
-                sound: 'default',
+                sound: isEmergency ? 'emergency_alarm' : 'default',
+                channel_id: isEmergency ? 'emergency_notifications' : 'default_notifications',
+                default_sound: !isEmergency,
+                default_vibrate_timings: !isEmergency,
+                vibrate_timings: isEmergency ? ['0s', '0.5s', '0.25s', '0.5s', '0.25s', '0.5s'] : undefined,
               },
             },
             apns: {
               payload: {
                 aps: {
-                  sound: 'default',
+                  sound: isEmergency ? 'emergency_alarm.caf' : 'default',
                   badge: 1,
+                  'interruption-level': isEmergency ? 'critical' : 'active',
                 },
               },
             },
             webpush: {
               notification: {
                 icon: '/favicon.ico',
+                vibrate: isEmergency ? [500, 250, 500, 250, 500] : [200],
+                requireInteraction: isEmergency,
+                tag: isEmergency ? 'emergency' : 'notification',
+              },
+              headers: {
+                Urgency: isEmergency ? 'high' : 'normal',
               },
             },
           },
