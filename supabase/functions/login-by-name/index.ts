@@ -90,8 +90,8 @@ serve(async (req) => {
         if (!matchedProfile) {
           console.log("No user with this name belongs to center:", centerId);
           return new Response(
-            JSON.stringify({ error: "هذا الحساب غير مسجل في هذا المركز" }),
-            { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            JSON.stringify({ success: false, error: "هذا الحساب غير مسجل في هذا المركز" }),
+            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         }
       } else {
@@ -158,16 +158,16 @@ serve(async (req) => {
           if (!hasAccessToCenter) {
             console.log("User does not have access to center:", centerId);
             return new Response(
-              JSON.stringify({ error: "هذا الحساب غير مسجل في هذا المركز" }),
-              { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+              JSON.stringify({ success: false, error: "هذا الحساب غير مسجل في هذا المركز" }),
+              { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
             );
           }
         }
       } else {
         console.log("No roles found for user");
         return new Response(
-          JSON.stringify({ error: "هذا الحساب غير مسجل في أي مركز" }),
-          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          JSON.stringify({ success: false, error: "هذا الحساب غير مسجل في أي مركز" }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
     }
