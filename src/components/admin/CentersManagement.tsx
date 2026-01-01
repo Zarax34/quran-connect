@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Building2, Plus, Pencil, Trash2, MapPin, Loader2, Camera, X } from "lucide-react";
+import { Building2, Plus, Pencil, Trash2, MapPin, Loader2, Camera, X, Phone, Mail } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,6 +32,8 @@ interface Center {
   description: string | null;
   is_active: boolean;
   logo_url: string | null;
+  phone: string | null;
+  email: string | null;
 }
 
 export const CentersManagement = () => {
@@ -46,6 +48,8 @@ export const CentersManagement = () => {
     name: "",
     location: "",
     description: "",
+    phone: "",
+    email: "",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -133,6 +137,8 @@ export const CentersManagement = () => {
               name: formData.name,
               location: formData.location || null,
               description: formData.description || null,
+              phone: formData.phone || null,
+              email: formData.email || null,
               logo_url: logoUrl,
             },
             id: editingCenter.id,
@@ -154,6 +160,8 @@ export const CentersManagement = () => {
               name: formData.name,
               location: formData.location || null,
               description: formData.description || null,
+              phone: formData.phone || null,
+              email: formData.email || null,
             },
           }),
         });
@@ -223,13 +231,15 @@ export const CentersManagement = () => {
       name: center.name,
       location: center.location || "",
       description: center.description || "",
+      phone: center.phone || "",
+      email: center.email || "",
     });
     setLogoPreview(center.logo_url);
     setIsDialogOpen(true);
   };
 
   const resetForm = () => {
-    setFormData({ name: "", location: "", description: "" });
+    setFormData({ name: "", location: "", description: "", phone: "", email: "" });
     setEditingCenter(null);
     setCenterLogo(null);
     setLogoPreview(null);
@@ -257,7 +267,7 @@ export const CentersManagement = () => {
               إضافة مركز
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-md">
+          <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>
                 {editingCenter ? "تعديل المركز" : "إضافة مركز جديد"}
@@ -332,6 +342,7 @@ export const CentersManagement = () => {
                   placeholder="أدخل اسم المركز"
                 />
               </div>
+
               <div className="space-y-2">
                 <label className="text-sm font-medium text-foreground">
                   الموقع
@@ -342,6 +353,40 @@ export const CentersManagement = () => {
                   placeholder="أدخل موقع المركز"
                 />
               </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">
+                  رقم الهاتف
+                </label>
+                <div className="relative">
+                  <Phone className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    value={formData.phone}
+                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    placeholder="أدخل رقم هاتف المركز"
+                    className="pr-10"
+                    dir="ltr"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">
+                  البريد الإلكتروني
+                </label>
+                <div className="relative">
+                  <Mail className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    type="email"
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    placeholder="أدخل البريد الإلكتروني للمركز"
+                    className="pr-10"
+                    dir="ltr"
+                  />
+                </div>
+              </div>
+
               <div className="space-y-2">
                 <label className="text-sm font-medium text-foreground">
                   الوصف
@@ -353,6 +398,7 @@ export const CentersManagement = () => {
                   rows={3}
                 />
               </div>
+
               <div className="flex gap-2 justify-end">
                 <Button
                   type="button"
@@ -401,6 +447,20 @@ export const CentersManagement = () => {
                       <span>{center.location}</span>
                     </div>
                   )}
+                  <div className="flex items-center gap-3 mt-1">
+                    {center.phone && (
+                      <div className="flex items-center gap-1 text-muted-foreground text-sm">
+                        <Phone className="w-3 h-3" />
+                        <span dir="ltr">{center.phone}</span>
+                      </div>
+                    )}
+                    {center.email && (
+                      <div className="flex items-center gap-1 text-muted-foreground text-sm">
+                        <Mail className="w-3 h-3" />
+                        <span dir="ltr">{center.email}</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <Button
