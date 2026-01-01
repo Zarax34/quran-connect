@@ -78,12 +78,21 @@ export const LoginScreen = ({ onLogin, onBack, centerName, centerId }: Props) =>
       const { error } = await signIn(identifier, password, centerId);
       
       if (error) {
-        if (error.message.includes("Invalid login credentials")) {
+        // Handle specific error messages
+        const errorMessage = error.message || "";
+        
+        if (errorMessage.includes("غير مسجل في هذا المركز")) {
+          toast.error("هذا الحساب غير مسجل في هذا المركز. يرجى اختيار المركز الصحيح.");
+        } else if (errorMessage.includes("غير مسجل في أي مركز")) {
+          toast.error("هذا الحساب غير مسجل في أي مركز. يرجى التواصل مع المسؤول.");
+        } else if (errorMessage.includes("Invalid login credentials") || errorMessage.includes("غير صحيحة")) {
           toast.error("اسم المستخدم أو كلمة المرور غير صحيحة");
-        } else if (error.message.includes("Email not confirmed")) {
+        } else if (errorMessage.includes("Email not confirmed")) {
           toast.error("يرجى تأكيد البريد الإلكتروني أولاً");
+        } else if (errorMessage.includes("غير موجود")) {
+          toast.error("اسم المستخدم غير موجود");
         } else {
-          toast.error("حدث خطأ في تسجيل الدخول");
+          toast.error(errorMessage || "حدث خطأ في تسجيل الدخول");
         }
         setIsLoading(false);
         return;
@@ -129,7 +138,12 @@ export const LoginScreen = ({ onLogin, onBack, centerName, centerId }: Props) =>
       );
       
       if (error) {
-        toast.error("فشل تسجيل الدخول. يرجى تسجيل الدخول يدوياً");
+        const errorMessage = error.message || "";
+        if (errorMessage.includes("غير مسجل في هذا المركز")) {
+          toast.error("هذا الحساب غير مسجل في هذا المركز");
+        } else {
+          toast.error("فشل تسجيل الدخول. يرجى تسجيل الدخول يدوياً");
+        }
         setIsBiometricLoading(false);
         return;
       }
