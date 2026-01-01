@@ -127,14 +127,23 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         body: { identifier, password, centerId }
       });
       
-      // Handle edge function errors (403, etc.)
+      // supabase.functions.invoke returns { data, error }
+      // For 403 errors, data contains the error message and error is set
       if (response.error) {
-        // Try to parse error message from response data
-        const errorMessage = response.data?.error || response.error.message || "خطأ في تسجيل الدخول";
+        // When edge function returns non-2xx, data still contains the response body
+        let errorMessage = "خطأ في تسجيل الدخول";
+        
+        if (response.data && typeof response.data === 'object' && 'error' in response.data) {
+          errorMessage = response.data.error as string;
+        } else if (response.error.message) {
+          errorMessage = response.error.message;
+        }
+        
+        console.log('Login error:', errorMessage);
         return { error: new Error(errorMessage) };
       }
       
-      // Check if data contains an error field
+      // Check if data contains an error field (edge function returned 200 but with error in body)
       if (response.data?.error) {
         return { error: new Error(response.data.error) };
       }
@@ -150,6 +159,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       return { error: null };
     } catch (err: unknown) {
       // Handle network errors or unexpected exceptions
+      console.error('Login exception:', err);
       const errorMessage = err instanceof Error ? err.message : "خطأ في تسجيل الدخول";
       return { error: new Error(errorMessage) };
     }
