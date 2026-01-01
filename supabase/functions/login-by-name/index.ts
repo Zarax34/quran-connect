@@ -43,61 +43,80 @@ serve(async (req) => {
     let userId: string | null = null;
 
     if (!emailRegex.test(trimmedIdentifier)) {
-      // First, try to find by name in profiles with email
-      const { data: profilesWithEmail } = await supabaseAdmin
+      // Search for profiles by name
+      const { data: profilesByName } = await supabaseAdmin
         .from("profiles")
         .select("id, email, full_name")
-        .not("email", "is", null);
+        .ilike("full_name", trimmedIdentifier);
 
-      console.log("Found profiles with email:", profilesWithEmail?.length);
+      console.log("Found profiles by name:", profilesByName?.length);
 
-      // Find profile with matching name (ignoring trailing/leading spaces)
-      let matchedProfile = profilesWithEmail?.find(p => 
+      // Filter to exact match (trimmed)
+      const matchedProfiles = profilesByName?.filter(p => 
         p.full_name?.trim() === trimmedIdentifier
-      );
+      ) || [];
 
-      if (matchedProfile?.email) {
-        email = matchedProfile.email;
-        userId = matchedProfile.id;
-        console.log("Found email in profile for user:", email);
-      } else {
-        // If not found in profiles.email, search in profiles by name and get auth user's email
-        const { data: allProfiles } = await supabaseAdmin
-          .from("profiles")
-          .select("id, full_name");
-        
-        console.log("Total profiles:", allProfiles?.length);
-        
-        const profileMatch = allProfiles?.find(p => 
-          p.full_name?.trim() === trimmedIdentifier
+      console.log("Exact matched profiles:", matchedProfiles.length);
+
+      if (matchedProfiles.length === 0) {
+        console.log("No profile found for:", trimmedIdentifier);
+        return new Response(
+          JSON.stringify({ error: "اسم المستخدم غير موجود" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
+      }
 
-        if (profileMatch) {
-          userId = profileMatch.id;
-          console.log("Found profile by name, looking up auth user:", profileMatch.id);
+      // If centerId is provided, find the user who belongs to this center
+      let matchedProfile = null;
+      
+      if (centerId && matchedProfiles.length > 1) {
+        // Get user roles to find which profile belongs to this center
+        for (const profile of matchedProfiles) {
+          const { data: roles } = await supabaseAdmin
+            .from("user_roles")
+            .select("role, center_id")
+            .eq("user_id", profile.id);
           
-          // Get the user's email from auth.users using admin API
-          const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.getUserById(profileMatch.id);
+          const isSuperAdmin = roles?.some(r => r.role === "super_admin");
+          const belongsToCenter = roles?.some(r => r.center_id === centerId);
           
-          if (authError) {
-            console.error("Error getting auth user:", authError);
-          } else if (authUser?.user?.email) {
-            email = authUser.user.email;
-            console.log("Found email from auth user:", email);
-          } else {
-            console.log("No email found in auth user");
-            return new Response(
-              JSON.stringify({ error: "اسم المستخدم غير موجود" }),
-              { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-            );
+          if (isSuperAdmin || belongsToCenter) {
+            matchedProfile = profile;
+            console.log("Found user belonging to center:", profile.id);
+            break;
           }
-        } else {
-          console.log("No profile found for:", trimmedIdentifier);
+        }
+        
+        if (!matchedProfile) {
+          console.log("No user with this name belongs to center:", centerId);
           return new Response(
-            JSON.stringify({ error: "اسم المستخدم غير موجود" }),
+            JSON.stringify({ error: "هذا الحساب غير مسجل في هذا المركز" }),
+            { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+      } else {
+        matchedProfile = matchedProfiles[0];
+      }
+
+      userId = matchedProfile.id;
+
+      if (matchedProfile.email) {
+        email = matchedProfile.email;
+        console.log("Found email in profile:", email);
+      } else {
+        // Get email from auth.users
+        const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.getUserById(matchedProfile.id);
+        
+        if (authError || !authUser?.user?.email) {
+          console.error("Error getting auth user:", authError);
+          return new Response(
+            JSON.stringify({ error: "خطأ في استرجاع بيانات المستخدم" }),
             { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         }
+        
+        email = authUser.user.email;
+        console.log("Found email from auth user:", email);
       }
     } else {
       // Email login - find user by email
@@ -119,7 +138,7 @@ serve(async (req) => {
       }
     }
 
-    // Check if user belongs to the selected center (if centerId is provided)
+    // Check if user belongs to the selected center (if centerId is provided and not already verified)
     if (centerId && userId) {
       const { data: userRoles } = await supabaseAdmin
         .from("user_roles")
