@@ -123,25 +123,35 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const signIn = async (identifier: string, password: string, centerId?: string) => {
     // Always use edge function for center validation
     try {
-      const { data, error } = await supabase.functions.invoke('login-by-name', {
+      const response = await supabase.functions.invoke('login-by-name', {
         body: { identifier, password, centerId }
       });
       
-      if (error || data?.error) {
-        return { error: new Error(data?.error || error?.message || "خطأ في تسجيل الدخول") };
+      // Handle edge function errors (403, etc.)
+      if (response.error) {
+        // Try to parse error message from response data
+        const errorMessage = response.data?.error || response.error.message || "خطأ في تسجيل الدخول";
+        return { error: new Error(errorMessage) };
       }
       
-      if (data?.session) {
+      // Check if data contains an error field
+      if (response.data?.error) {
+        return { error: new Error(response.data.error) };
+      }
+      
+      if (response.data?.session) {
         // Set the session manually
         await supabase.auth.setSession({
-          access_token: data.session.access_token,
-          refresh_token: data.session.refresh_token,
+          access_token: response.data.session.access_token,
+          refresh_token: response.data.session.refresh_token,
         });
       }
       
       return { error: null };
-    } catch (err) {
-      return { error: err instanceof Error ? err : new Error("خطأ في تسجيل الدخول") };
+    } catch (err: unknown) {
+      // Handle network errors or unexpected exceptions
+      const errorMessage = err instanceof Error ? err.message : "خطأ في تسجيل الدخول";
+      return { error: new Error(errorMessage) };
     }
   };
 
