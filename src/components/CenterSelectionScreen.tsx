@@ -24,32 +24,39 @@ export const CenterSelectionScreen = ({ onSelectCenter }: Props) => {
   useEffect(() => {
     const fetchCenters = async () => {
       try {
-        const { data, error } = await supabase
+        // Fetch centers
+        const { data: centersData, error: centersError } = await supabase
           .from("centers")
           .select("id, name, location, logo_url")
           .eq("is_active", true)
           .order("name");
 
-        if (error) {
-          console.error("Error fetching centers:", error);
+        if (centersError) {
+          console.error("Error fetching centers:", centersError);
           return;
         }
 
-        // Fetch students count for each center
-        const centersWithCount = await Promise.all(
-          (data || []).map(async (center) => {
-            const { count } = await supabase
-              .from("students")
-              .select("*", { count: "exact", head: true })
-              .eq("center_id", center.id)
-              .eq("is_active", true);
-            
-            return {
-              ...center,
-              students_count: count || 0,
-            };
-          })
-        );
+        // Fetch student counts using the RPC function (works without auth)
+        const { data: countsData, error: countsError } = await supabase
+          .rpc("get_center_student_counts");
+
+        if (countsError) {
+          console.error("Error fetching student counts:", countsError);
+        }
+
+        // Create a map of center_id to student_count
+        const countsMap = new Map<string, number>();
+        if (countsData) {
+          countsData.forEach((item: { center_id: string; student_count: number }) => {
+            countsMap.set(item.center_id, item.student_count);
+          });
+        }
+
+        // Merge centers with their student counts
+        const centersWithCount = (centersData || []).map((center) => ({
+          ...center,
+          students_count: countsMap.get(center.id) || 0,
+        }));
 
         setCenters(centersWithCount);
       } catch (error) {
