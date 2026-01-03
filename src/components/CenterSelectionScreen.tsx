@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Building2, MapPin, Users, Search, ChevronLeft, Loader2 } from "lucide-react";
+import { Building2, MapPin, Users, Search, ChevronLeft, Loader2, BookOpen } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
@@ -9,6 +9,7 @@ interface Center {
   name: string;
   location: string | null;
   students_count?: number;
+  halaqat_count?: number;
   logo_url?: string | null;
 }
 
@@ -36,29 +37,36 @@ export const CenterSelectionScreen = ({ onSelectCenter }: Props) => {
           return;
         }
 
-        // Fetch student counts using the RPC function (works without auth)
-        const { data: countsData, error: countsError } = await supabase
-          .rpc("get_center_student_counts");
+        // Fetch student counts and halaqat counts in parallel
+        const [studentCountsResult, halaqatCountsResult] = await Promise.all([
+          supabase.rpc("get_center_student_counts"),
+          supabase.rpc("get_center_halaqat_counts")
+        ]);
 
-        if (countsError) {
-          console.error("Error fetching student counts:", countsError);
-        }
+        // Create maps for counts
+        const studentCountsMap = new Map<string, number>();
+        const halaqatCountsMap = new Map<string, number>();
 
-        // Create a map of center_id to student_count
-        const countsMap = new Map<string, number>();
-        if (countsData) {
-          countsData.forEach((item: { center_id: string; student_count: number }) => {
-            countsMap.set(item.center_id, item.student_count);
+        if (studentCountsResult.data) {
+          studentCountsResult.data.forEach((item: { center_id: string; student_count: number }) => {
+            studentCountsMap.set(item.center_id, item.student_count);
           });
         }
 
-        // Merge centers with their student counts
-        const centersWithCount = (centersData || []).map((center) => ({
+        if (halaqatCountsResult.data) {
+          halaqatCountsResult.data.forEach((item: { center_id: string; halaqat_count: number }) => {
+            halaqatCountsMap.set(item.center_id, item.halaqat_count);
+          });
+        }
+
+        // Merge centers with their counts
+        const centersWithCounts = (centersData || []).map((center) => ({
           ...center,
-          students_count: countsMap.get(center.id) || 0,
+          students_count: studentCountsMap.get(center.id) || 0,
+          halaqat_count: halaqatCountsMap.get(center.id) || 0,
         }));
 
-        setCenters(centersWithCount);
+        setCenters(centersWithCounts);
       } catch (error) {
         console.error("Error:", error);
       } finally {
@@ -138,9 +146,15 @@ export const CenterSelectionScreen = ({ onSelectCenter }: Props) => {
                       <span className="text-sm truncate">{center.location}</span>
                     </div>
                   )}
-                  <div className="flex items-center gap-1 text-muted-foreground mt-1">
-                    <Users className="w-4 h-4 shrink-0" />
-                    <span className="text-sm">{center.students_count || 0} طالب</span>
+                  <div className="flex items-center gap-4 text-muted-foreground mt-1">
+                    <div className="flex items-center gap-1">
+                      <Users className="w-4 h-4 shrink-0" />
+                      <span className="text-sm">{center.students_count || 0} طالب</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <BookOpen className="w-4 h-4 shrink-0" />
+                      <span className="text-sm">{center.halaqat_count || 0} حلقة</span>
+                    </div>
                   </div>
                 </div>
 

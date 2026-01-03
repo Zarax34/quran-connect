@@ -989,6 +989,58 @@ export type Database = {
           },
         ]
       }
+      student_points: {
+        Row: {
+          created_at: string | null
+          id: string
+          points: number
+          reason: string
+          recitation_id: string | null
+          report_entry_id: string | null
+          student_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          points?: number
+          reason: string
+          recitation_id?: string | null
+          report_entry_id?: string | null
+          student_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          points?: number
+          reason?: string
+          recitation_id?: string | null
+          report_entry_id?: string | null
+          student_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "student_points_recitation_id_fkey"
+            columns: ["recitation_id"]
+            isOneToOne: false
+            referencedRelation: "recitations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "student_points_report_entry_id_fkey"
+            columns: ["report_entry_id"]
+            isOneToOne: false
+            referencedRelation: "report_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "student_points_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       students: {
         Row: {
           birth_date: string | null
@@ -1131,9 +1183,26 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      calculate_recitation_points: {
+        Args: {
+          _from_ayah: number
+          _grade: number
+          _recitation_type: string
+          _to_ayah: number
+        }
+        Returns: number
+      }
       can_access_center: {
         Args: { _center_id: string; _user_id: string }
         Returns: boolean
+      }
+      get_attendance_points: { Args: { _status: string }; Returns: number }
+      get_center_halaqat_counts: {
+        Args: never
+        Returns: {
+          center_id: string
+          halaqat_count: number
+        }[]
       }
       get_center_student_counts: {
         Args: never
@@ -1141,6 +1210,19 @@ export type Database = {
           center_id: string
           student_count: number
         }[]
+      }
+      get_student_points_details: {
+        Args: { _student_id: string }
+        Returns: {
+          created_at: string
+          id: string
+          points: number
+          reason: string
+        }[]
+      }
+      get_student_total_points: {
+        Args: { _student_id: string }
+        Returns: number
       }
       get_user_center_ids: { Args: { _user_id: string }; Returns: string[] }
       has_role: {
