@@ -1135,6 +1135,13 @@ export type Database = {
         Args: { _center_id: string; _user_id: string }
         Returns: boolean
       }
+      get_center_student_counts: {
+        Args: never
+        Returns: {
+          center_id: string
+          student_count: number
+        }[]
+      }
       get_user_center_ids: { Args: { _user_id: string }; Returns: string[] }
       has_role: {
         Args: {
