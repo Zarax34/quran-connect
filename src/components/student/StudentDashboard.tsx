@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
   BookOpen, 
   Calendar, 
@@ -14,7 +13,9 @@ import {
   Loader2,
   CalendarDays,
   MapPin,
-  Trophy
+  Trophy,
+  ShoppingCart,
+  Home
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -23,6 +24,10 @@ import { ar } from "date-fns/locale";
 import { ProgressChart } from "./ProgressChart";
 import { StudentPoints } from "./StudentPoints";
 import { StudentLeaderboard } from "./StudentLeaderboard";
+import { StudentStore } from "./StudentStore";
+import { StudentBadges } from "./StudentBadges";
+
+type TabType = "home" | "store" | "badges" | "leaderboard" | "reports";
 
 interface StudentInfo {
   id: string;
@@ -80,6 +85,7 @@ interface ActivityApproval {
 
 export const StudentDashboard = () => {
   const { user } = useAuth();
+  const [activeTab, setActiveTab] = useState<TabType>("home");
   const [isLoading, setIsLoading] = useState(true);
   const [studentInfo, setStudentInfo] = useState<StudentInfo | null>(null);
   const [reportEntries, setReportEntries] = useState<ReportEntry[]>([]);
@@ -100,53 +106,23 @@ export const StudentDashboard = () => {
 
   const fetchStudentData = async () => {
     try {
-      // Get student info by user_id
       const { data: student, error: studentError } = await supabase
         .from("students")
-        .select(`
-          id,
-          full_name,
-          halqa_id,
-          join_date,
-          previous_memorization_surah,
-          previous_memorization_ayah,
-          halaqat (name)
-        `)
+        .select(`id, full_name, halqa_id, join_date, previous_memorization_surah, previous_memorization_ayah, halaqat (name)`)
         .eq("user_id", user?.id)
         .maybeSingle();
 
       if (studentError) throw studentError;
 
       if (student) {
-        setStudentInfo({
-          ...student,
-          halqa_name: student.halaqat?.name
-        });
+        setStudentInfo({ ...student, halqa_name: student.halaqat?.name });
 
-        // Get report entries for this student
-        const { data: entries, error: entriesError } = await supabase
+        const { data: entries } = await supabase
           .from("report_entries")
-          .select(`
-            id,
-            report_id,
-            attendance_status,
-            notes,
-            reports (report_date),
-            recitations (
-              id,
-              surah,
-              from_ayah,
-              to_ayah,
-              type,
-              grade,
-              notes
-            )
-          `)
+          .select(`id, report_id, attendance_status, notes, reports (report_date), recitations (id, surah, from_ayah, to_ayah, type, grade, notes)`)
           .eq("student_id", student.id)
           .order("created_at", { ascending: false })
           .limit(30);
-
-        if (entriesError) throw entriesError;
 
         const formattedEntries = (entries || []).map(entry => ({
           id: entry.id,
@@ -159,71 +135,26 @@ export const StudentDashboard = () => {
 
         setReportEntries(formattedEntries);
 
-        // Calculate attendance stats
-        const stats: AttendanceStats = {
-          present: 0,
-          absent: 0,
-          absent_with_permission: 0,
-          escaped: 0,
-          total: formattedEntries.length
-        };
-
+        const stats: AttendanceStats = { present: 0, absent: 0, absent_with_permission: 0, escaped: 0, total: formattedEntries.length };
         formattedEntries.forEach(entry => {
           if (entry.attendance_status === "present") stats.present++;
           else if (entry.attendance_status === "absent") stats.absent++;
           else if (entry.attendance_status === "absent_with_permission") stats.absent_with_permission++;
           else if (entry.attendance_status === "escaped") stats.escaped++;
         });
-
         setAttendanceStats(stats);
 
-        // Fetch activities for this student
-        const { data: activitiesData, error: activitiesError } = await supabase
+        const { data: activitiesData } = await supabase
           .from("activity_approvals")
-          .select(`
-            id,
-            activity_id,
-            approved,
-            activities (*)
-          `)
+          .select(`id, activity_id, approved, activities (*)`)
           .eq("student_id", student.id);
 
-        if (activitiesError) throw activitiesError;
-
-        setActivities(activitiesData?.map((a: any) => ({
-          ...a,
-          activity: a.activities
-        })) || []);
+        setActivities(activitiesData?.map((a: any) => ({ ...a, activity: a.activities })) || []);
       }
     } catch (error) {
       console.error("Error fetching student data:", error);
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const getAttendanceIcon = (status: string | null) => {
-    switch (status) {
-      case "present":
-        return <CheckCircle className="w-4 h-4 text-green-500" />;
-      case "absent":
-        return <XCircle className="w-4 h-4 text-destructive" />;
-      case "absent_with_permission":
-        return <Clock className="w-4 h-4 text-yellow-500" />;
-      case "escaped":
-        return <XCircle className="w-4 h-4 text-orange-500" />;
-      default:
-        return null;
-    }
-  };
-
-  const getAttendanceLabel = (status: string | null) => {
-    switch (status) {
-      case "present": return "حاضر";
-      case "absent": return "غائب";
-      case "absent_with_permission": return "غياب بإذن";
-      case "escaped": return "هروب";
-      default: return "غير محدد";
     }
   };
 
@@ -237,20 +168,7 @@ export const StudentDashboard = () => {
     }
   };
 
-  const getApprovalStatus = (approved: boolean | null) => {
-    if (approved === null) {
-      return { text: "في انتظار موافقة ولي الأمر", variant: "outline" as const, icon: Clock };
-    }
-    if (approved) {
-      return { text: "تمت الموافقة", variant: "default" as const, icon: CheckCircle };
-    }
-    return { text: "مرفوض", variant: "destructive" as const, icon: XCircle };
-  };
-
-  const attendanceRate = attendanceStats.total > 0 
-    ? Math.round((attendanceStats.present / attendanceStats.total) * 100) 
-    : 0;
-
+  const attendanceRate = attendanceStats.total > 0 ? Math.round((attendanceStats.present / attendanceStats.total) * 100) : 0;
   const totalRecitations = reportEntries.reduce((sum, entry) => sum + entry.recitations.length, 0);
 
   if (isLoading) {
@@ -270,7 +188,7 @@ export const StudentDashboard = () => {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-20">
       {/* Student Info Card */}
       <Card>
         <CardContent className="pt-6">
@@ -280,16 +198,7 @@ export const StudentDashboard = () => {
             </div>
             <div>
               <h2 className="text-xl font-bold text-foreground">{studentInfo.full_name}</h2>
-              {studentInfo.halqa_name && (
-                <Badge variant="secondary" className="mt-1">
-                  {studentInfo.halqa_name}
-                </Badge>
-              )}
-              {studentInfo.join_date && (
-                <p className="text-sm text-muted-foreground mt-1">
-                  تاريخ الالتحاق: {format(new Date(studentInfo.join_date), "d MMMM yyyy", { locale: ar })}
-                </p>
-              )}
+              {studentInfo.halqa_name && <Badge variant="secondary" className="mt-1">{studentInfo.halqa_name}</Badge>}
             </div>
           </div>
         </CardContent>
@@ -326,100 +235,13 @@ export const StudentDashboard = () => {
         </Card>
       </div>
 
-      {/* Previous Memorization */}
-      {studentInfo.previous_memorization_surah && (
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base flex items-center gap-2">
-              <BookOpen className="w-4 h-4" />
-              الحفظ السابق
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-foreground">
-              سورة {studentInfo.previous_memorization_surah}
-              {studentInfo.previous_memorization_ayah && (
-                <span className="text-muted-foreground"> - الآية {studentInfo.previous_memorization_ayah}</span>
-              )}
-            </p>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Tabs for Reports, Attendance, Progress, and Activities */}
-      <Tabs defaultValue="points" className="w-full">
-        <TabsList className="grid w-full grid-cols-6">
-          <TabsTrigger value="points">النقاط</TabsTrigger>
-          <TabsTrigger value="leaderboard">المتصدرين</TabsTrigger>
-          <TabsTrigger value="activities">الأنشطة</TabsTrigger>
-          <TabsTrigger value="progress">التقدم</TabsTrigger>
-          <TabsTrigger value="reports">التقارير</TabsTrigger>
-          <TabsTrigger value="attendance">الحضور</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="points" className="mt-4">
-          <StudentPoints studentId={studentInfo.id} />
-        </TabsContent>
-
-        <TabsContent value="leaderboard" className="mt-4">
-          <StudentLeaderboard 
-            halqaId={studentInfo.halqa_id || undefined} 
-            currentStudentId={studentInfo.id}
-            limit={20}
-          />
-        </TabsContent>
-
-        <TabsContent value="activities" className="mt-4 space-y-3">
-          {activities.length === 0 ? (
-            <Card className="p-6 text-center">
-              <CalendarDays className="w-10 h-10 text-muted-foreground mx-auto mb-2" />
-              <p className="text-muted-foreground">لا توجد أنشطة مسجلة حالياً</p>
-            </Card>
-          ) : (
-            activities.map(item => {
-              const status = getApprovalStatus(item.approved);
-              
-              return (
-                <Card key={item.id}>
-                  <CardContent className="pt-4">
-                    <div className="flex items-start justify-between mb-2">
-                      <h4 className="font-semibold text-foreground">{item.activity?.name}</h4>
-                      <Badge variant={status.variant} className="gap-1">
-                        <status.icon className="w-3 h-3" />
-                        {status.text}
-                      </Badge>
-                    </div>
-                    
-                    {item.activity?.description && (
-                      <p className="text-sm text-muted-foreground mb-2">{item.activity.description}</p>
-                    )}
-
-                    <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                      {item.activity?.start_date && (
-                        <span className="flex items-center gap-1">
-                          <Calendar className="w-4 h-4" />
-                          {format(new Date(item.activity.start_date), "d MMMM yyyy", { locale: ar })}
-                        </span>
-                      )}
-                      {item.activity?.location && (
-                        <span className="flex items-center gap-1">
-                          <MapPin className="w-4 h-4" />
-                          {item.activity.location}
-                        </span>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })
-          )}
-        </TabsContent>
-
-        <TabsContent value="progress" className="mt-4">
-          <ProgressChart reportEntries={reportEntries} />
-        </TabsContent>
-
-        <TabsContent value="reports" className="mt-4 space-y-3">
+      {/* Tab Content */}
+      {activeTab === "home" && <StudentPoints studentId={studentInfo.id} />}
+      {activeTab === "store" && <StudentStore studentId={studentInfo.id} halqaId={studentInfo.halqa_id} />}
+      {activeTab === "badges" && <StudentBadges studentId={studentInfo.id} />}
+      {activeTab === "leaderboard" && <StudentLeaderboard halqaId={studentInfo.halqa_id || undefined} currentStudentId={studentInfo.id} limit={20} />}
+      {activeTab === "reports" && (
+        <div className="space-y-3">
           {reportEntries.length === 0 ? (
             <Card className="p-6 text-center">
               <FileText className="w-10 h-10 text-muted-foreground mx-auto mb-2" />
@@ -430,106 +252,52 @@ export const StudentDashboard = () => {
               <Card key={entry.id}>
                 <CardContent className="pt-4">
                   <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <Calendar className="w-4 h-4 text-muted-foreground" />
-                      <span className="text-sm font-medium text-foreground">
-                        {entry.report_date ? format(new Date(entry.report_date), "d MMMM yyyy", { locale: ar }) : "غير محدد"}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      {getAttendanceIcon(entry.attendance_status)}
-                      <span className="text-sm text-muted-foreground">
-                        {getAttendanceLabel(entry.attendance_status)}
-                      </span>
-                    </div>
+                    <span className="text-sm font-medium text-foreground">
+                      {entry.report_date ? format(new Date(entry.report_date), "d MMMM yyyy", { locale: ar }) : "غير محدد"}
+                    </span>
                   </div>
-
                   {entry.recitations.length > 0 && (
                     <div className="space-y-2">
                       {entry.recitations.map(rec => (
                         <div key={rec.id} className="bg-muted/50 rounded-lg p-3">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <Badge variant="outline" className="mb-1">
-                                {getRecitationTypeLabel(rec.type)}
-                              </Badge>
-                              <p className="text-sm text-foreground">
-                                سورة {rec.surah} (الآيات {rec.from_ayah} - {rec.to_ayah})
-                              </p>
-                            </div>
-                            {rec.grade !== null && (
-                              <div className="text-center">
-                                <p className="text-lg font-bold text-primary">{rec.grade}</p>
-                                <p className="text-xs text-muted-foreground">الدرجة</p>
-                              </div>
-                            )}
-                          </div>
-                          {rec.notes && (
-                            <p className="text-xs text-muted-foreground mt-2">{rec.notes}</p>
-                          )}
+                          <Badge variant="outline" className="mb-1">{getRecitationTypeLabel(rec.type)}</Badge>
+                          <p className="text-sm text-foreground">سورة {rec.surah} (الآيات {rec.from_ayah} - {rec.to_ayah})</p>
                         </div>
                       ))}
                     </div>
-                  )}
-
-                  {entry.notes && (
-                    <p className="text-sm text-muted-foreground mt-3 border-t pt-2">
-                      {entry.notes}
-                    </p>
                   )}
                 </CardContent>
               </Card>
             ))
           )}
-        </TabsContent>
+        </div>
+      )}
 
-        <TabsContent value="attendance" className="mt-4">
-          <Card>
-            <CardContent className="pt-4">
-              <div className="space-y-4">
-                <div className="flex items-center justify-between p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle className="w-5 h-5 text-green-600" />
-                    <span className="text-foreground">حاضر</span>
-                  </div>
-                  <span className="text-xl font-bold text-green-600">{attendanceStats.present}</span>
-                </div>
-
-                <div className="flex items-center justify-between p-3 bg-red-50 dark:bg-red-900/20 rounded-lg">
-                  <div className="flex items-center gap-2">
-                    <XCircle className="w-5 h-5 text-destructive" />
-                    <span className="text-foreground">غائب</span>
-                  </div>
-                  <span className="text-xl font-bold text-destructive">{attendanceStats.absent}</span>
-                </div>
-
-                <div className="flex items-center justify-between p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
-                  <div className="flex items-center gap-2">
-                    <Clock className="w-5 h-5 text-yellow-600" />
-                    <span className="text-foreground">غياب بإذن</span>
-                  </div>
-                  <span className="text-xl font-bold text-yellow-600">{attendanceStats.absent_with_permission}</span>
-                </div>
-
-                <div className="flex items-center justify-between p-3 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
-                  <div className="flex items-center gap-2">
-                    <XCircle className="w-5 h-5 text-orange-500" />
-                    <span className="text-foreground">هروب</span>
-                  </div>
-                  <span className="text-xl font-bold text-orange-500">{attendanceStats.escaped}</span>
-                </div>
-
-                <div className="border-t pt-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">إجمالي الأيام</span>
-                    <span className="text-xl font-bold text-foreground">{attendanceStats.total}</span>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+      {/* Bottom Navigation Bar */}
+      <div className="fixed bottom-0 left-0 right-0 bg-card border-t border-border z-50 px-2 py-2">
+        <div className="flex justify-around items-center max-w-md mx-auto">
+          <button onClick={() => setActiveTab("home")} className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors ${activeTab === "home" ? "text-primary bg-primary/10" : "text-muted-foreground"}`}>
+            <Home className="w-5 h-5" />
+            <span className="text-xs">الرئيسية</span>
+          </button>
+          <button onClick={() => setActiveTab("store")} className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors ${activeTab === "store" ? "text-primary bg-primary/10" : "text-muted-foreground"}`}>
+            <ShoppingCart className="w-5 h-5" />
+            <span className="text-xs">المتجر</span>
+          </button>
+          <button onClick={() => setActiveTab("badges")} className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors ${activeTab === "badges" ? "text-primary bg-primary/10" : "text-muted-foreground"}`}>
+            <Award className="w-5 h-5" />
+            <span className="text-xs">الشارات</span>
+          </button>
+          <button onClick={() => setActiveTab("leaderboard")} className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors ${activeTab === "leaderboard" ? "text-primary bg-primary/10" : "text-muted-foreground"}`}>
+            <Trophy className="w-5 h-5" />
+            <span className="text-xs">المتصدرين</span>
+          </button>
+          <button onClick={() => setActiveTab("reports")} className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors ${activeTab === "reports" ? "text-primary bg-primary/10" : "text-muted-foreground"}`}>
+            <FileText className="w-5 h-5" />
+            <span className="text-xs">التقارير</span>
+          </button>
+        </div>
+      </div>
     </div>
   );
 };
