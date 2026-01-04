@@ -22,6 +22,7 @@ import { format } from "date-fns";
 import { ar } from "date-fns/locale";
 import { ProgressChart } from "./ProgressChart";
 import { StudentPoints } from "./StudentPoints";
+import { StudentLeaderboard } from "./StudentLeaderboard";
 
 interface StudentInfo {
   id: string;
@@ -347,8 +348,9 @@ export const StudentDashboard = () => {
 
       {/* Tabs for Reports, Attendance, Progress, and Activities */}
       <Tabs defaultValue="points" className="w-full">
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="points">النقاط</TabsTrigger>
+          <TabsTrigger value="leaderboard">المتصدرين</TabsTrigger>
           <TabsTrigger value="activities">الأنشطة</TabsTrigger>
           <TabsTrigger value="progress">التقدم</TabsTrigger>
           <TabsTrigger value="reports">التقارير</TabsTrigger>
@@ -357,6 +359,14 @@ export const StudentDashboard = () => {
 
         <TabsContent value="points" className="mt-4">
           <StudentPoints studentId={studentInfo.id} />
+        </TabsContent>
+
+        <TabsContent value="leaderboard" className="mt-4">
+          <StudentLeaderboard 
+            halqaId={studentInfo.halqa_id || undefined} 
+            currentStudentId={studentInfo.id}
+            limit={20}
+          />
         </TabsContent>
 
         <TabsContent value="activities" className="mt-4 space-y-3">
