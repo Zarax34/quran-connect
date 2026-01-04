@@ -212,6 +212,45 @@ export type Database = {
           },
         ]
       }
+      badge_settings: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          icon_name: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          points_value: number
+          requirements_type: string
+          requirements_value: Json
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          icon_name?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          points_value?: number
+          requirements_type: string
+          requirements_value?: Json
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          icon_name?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          points_value?: number
+          requirements_type?: string
+          requirements_value?: Json
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       centers: {
         Row: {
           created_at: string | null
@@ -506,6 +545,137 @@ export type Database = {
           },
         ]
       }
+      halqa_badges: {
+        Row: {
+          badge_name: string
+          description: string | null
+          earned_at: string | null
+          halqa_id: string
+          id: string
+          points_value: number | null
+        }
+        Insert: {
+          badge_name: string
+          description?: string | null
+          earned_at?: string | null
+          halqa_id: string
+          id?: string
+          points_value?: number | null
+        }
+        Update: {
+          badge_name?: string
+          description?: string | null
+          earned_at?: string | null
+          halqa_id?: string
+          id?: string
+          points_value?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "halqa_badges_halqa_id_fkey"
+            columns: ["halqa_id"]
+            isOneToOne: false
+            referencedRelation: "halaqat"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      halqa_points: {
+        Row: {
+          created_at: string | null
+          halqa_id: string
+          id: string
+          points: number
+          reason: string
+        }
+        Insert: {
+          created_at?: string | null
+          halqa_id: string
+          id?: string
+          points?: number
+          reason: string
+        }
+        Update: {
+          created_at?: string | null
+          halqa_id?: string
+          id?: string
+          points?: number
+          reason?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "halqa_points_halqa_id_fkey"
+            columns: ["halqa_id"]
+            isOneToOne: false
+            referencedRelation: "halaqat"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      halqa_purchase_votes: {
+        Row: {
+          created_at: string | null
+          ends_at: string | null
+          halqa_id: string
+          id: string
+          initiated_by: string
+          required_votes: number
+          status: string | null
+          store_item_id: string
+          total_students: number
+          votes_against: number | null
+          votes_for: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          ends_at?: string | null
+          halqa_id: string
+          id?: string
+          initiated_by: string
+          required_votes: number
+          status?: string | null
+          store_item_id: string
+          total_students: number
+          votes_against?: number | null
+          votes_for?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          ends_at?: string | null
+          halqa_id?: string
+          id?: string
+          initiated_by?: string
+          required_votes?: number
+          status?: string | null
+          store_item_id?: string
+          total_students?: number
+          votes_against?: number | null
+          votes_for?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "halqa_purchase_votes_halqa_id_fkey"
+            columns: ["halqa_id"]
+            isOneToOne: false
+            referencedRelation: "halaqat"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "halqa_purchase_votes_initiated_by_fkey"
+            columns: ["initiated_by"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "halqa_purchase_votes_store_item_id_fkey"
+            columns: ["store_item_id"]
+            isOneToOne: false
+            referencedRelation: "store_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       holiday_attendance: {
         Row: {
           attended: boolean | null
@@ -737,6 +907,41 @@ export type Database = {
         }
         Relationships: []
       }
+      points_conversions: {
+        Row: {
+          amount: number
+          conversion_type: string
+          created_at: string | null
+          id: string
+          result: number
+          student_id: string
+        }
+        Insert: {
+          amount: number
+          conversion_type: string
+          created_at?: string | null
+          id?: string
+          result: number
+          student_id: string
+        }
+        Update: {
+          amount?: number
+          conversion_type?: string
+          created_at?: string | null
+          id?: string
+          result?: number
+          student_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "points_conversions_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -950,6 +1155,101 @@ export type Database = {
           },
         ]
       }
+      store_items: {
+        Row: {
+          badges_cost: number | null
+          center_id: string | null
+          created_at: string | null
+          description: string | null
+          id: string
+          image_url: string | null
+          is_active: boolean | null
+          item_type: string
+          name: string
+          points_cost: number | null
+          stock_quantity: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          badges_cost?: number | null
+          center_id?: string | null
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          image_url?: string | null
+          is_active?: boolean | null
+          item_type?: string
+          name: string
+          points_cost?: number | null
+          stock_quantity?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          badges_cost?: number | null
+          center_id?: string | null
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          image_url?: string | null
+          is_active?: boolean | null
+          item_type?: string
+          name?: string
+          points_cost?: number | null
+          stock_quantity?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "store_items_center_id_fkey"
+            columns: ["center_id"]
+            isOneToOne: false
+            referencedRelation: "centers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      student_badges: {
+        Row: {
+          badge_setting_id: string
+          earned_at: string | null
+          earned_date: string | null
+          id: string
+          notes: string | null
+          student_id: string
+        }
+        Insert: {
+          badge_setting_id: string
+          earned_at?: string | null
+          earned_date?: string | null
+          id?: string
+          notes?: string | null
+          student_id: string
+        }
+        Update: {
+          badge_setting_id?: string
+          earned_at?: string | null
+          earned_date?: string | null
+          id?: string
+          notes?: string | null
+          student_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "student_badges_badge_setting_id_fkey"
+            columns: ["badge_setting_id"]
+            isOneToOne: false
+            referencedRelation: "badge_settings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "student_badges_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       student_parents: {
         Row: {
           created_at: string | null
@@ -1037,6 +1337,93 @@ export type Database = {
             columns: ["student_id"]
             isOneToOne: false
             referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      student_purchases: {
+        Row: {
+          badges_spent: number | null
+          delivered_at: string | null
+          id: string
+          points_spent: number | null
+          purchased_at: string | null
+          status: string | null
+          store_item_id: string
+          student_id: string
+        }
+        Insert: {
+          badges_spent?: number | null
+          delivered_at?: string | null
+          id?: string
+          points_spent?: number | null
+          purchased_at?: string | null
+          status?: string | null
+          store_item_id: string
+          student_id: string
+        }
+        Update: {
+          badges_spent?: number | null
+          delivered_at?: string | null
+          id?: string
+          points_spent?: number | null
+          purchased_at?: string | null
+          status?: string | null
+          store_item_id?: string
+          student_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "student_purchases_store_item_id_fkey"
+            columns: ["store_item_id"]
+            isOneToOne: false
+            referencedRelation: "store_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "student_purchases_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      student_votes: {
+        Row: {
+          id: string
+          student_id: string
+          vote: boolean
+          vote_id: string
+          voted_at: string | null
+        }
+        Insert: {
+          id?: string
+          student_id: string
+          vote: boolean
+          vote_id: string
+          voted_at?: string | null
+        }
+        Update: {
+          id?: string
+          student_id?: string
+          vote?: boolean
+          vote_id?: string
+          voted_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "student_votes_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "student_votes_vote_id_fkey"
+            columns: ["vote_id"]
+            isOneToOne: false
+            referencedRelation: "halqa_purchase_votes"
             referencedColumns: ["id"]
           },
         ]
@@ -1210,6 +1597,15 @@ export type Database = {
           center_id: string
           student_count: number
         }[]
+      }
+      get_halqa_total_points: { Args: { _halqa_id: string }; Returns: number }
+      get_student_available_badges: {
+        Args: { _student_id: string }
+        Returns: number
+      }
+      get_student_available_points: {
+        Args: { _student_id: string }
+        Returns: number
       }
       get_student_points_details: {
         Args: { _student_id: string }
