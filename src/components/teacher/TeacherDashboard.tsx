@@ -11,7 +11,8 @@ import {
   XCircle,
   Clock,
   Eye,
-  CalendarDays
+  CalendarDays,
+  Trophy
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -31,8 +32,9 @@ import { toast } from "sonner";
 import { DailyReports } from "./DailyReports";
 import { UserSettings } from "@/components/settings/UserSettings";
 import { HolidaysManagement } from "@/components/admin/HolidaysManagement";
+import { StudentLeaderboard } from "@/components/student/StudentLeaderboard";
 
-type TabType = "home" | "reports" | "review" | "holidays" | "notifications" | "settings";
+type TabType = "home" | "reports" | "review" | "holidays" | "leaderboard" | "notifications" | "settings";
 
 interface Stats {
   myStudents: number;
@@ -400,6 +402,13 @@ export const TeacherDashboard = () => {
         );
       case "holidays":
         return <HolidaysManagement />;
+      case "leaderboard":
+        return (
+          <div className="space-y-4">
+            <h2 className="text-xl font-bold text-foreground">قائمة المتصدرين</h2>
+            <StudentLeaderboard limit={20} />
+          </div>
+        );
       case "notifications":
         return (
           <div className="space-y-4">
@@ -489,6 +498,16 @@ export const TeacherDashboard = () => {
                     <span className="text-sm text-foreground font-medium">العطلات</span>
                   </button>
                 )}
+                
+                <button
+                  onClick={() => setActiveTab("leaderboard")}
+                  className="flex flex-col items-center gap-2 p-4 rounded-xl bg-card border border-border/50 hover:bg-accent/50 transition-colors"
+                >
+                  <div className="w-12 h-12 rounded-xl bg-yellow-100 dark:bg-yellow-900/30 flex items-center justify-center">
+                    <Trophy className="w-6 h-6 text-yellow-600" />
+                  </div>
+                  <span className="text-sm text-foreground font-medium">المتصدرين</span>
+                </button>
               </div>
             </section>
           </>

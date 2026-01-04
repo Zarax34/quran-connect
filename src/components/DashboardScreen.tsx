@@ -19,7 +19,8 @@ import {
   ArrowRight,
   CalendarDays,
   Activity,
-  Home
+  Home,
+  Trophy
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -45,9 +46,10 @@ import { ParentAccountsList } from "./admin/ParentAccountsList";
 import { UserSettings } from "./settings/UserSettings";
 import { StaffAccountsList } from "./admin/StaffAccountsList";
 import { EmergencyNotification } from "./admin/EmergencyNotification";
+import { StudentLeaderboard } from "./student/StudentLeaderboard";
 
 type TabType = "home" | "students" | "reports" | "notifications" | "settings";
-type AdminView = "dashboard" | "centers" | "students" | "halaqat" | "users" | "announcements" | "parents" | "courses" | "activities" | "holidays" | "reports" | "student-accounts" | "parent-accounts" | "staff-accounts";
+type AdminView = "dashboard" | "centers" | "students" | "halaqat" | "users" | "announcements" | "parents" | "courses" | "activities" | "holidays" | "reports" | "student-accounts" | "parent-accounts" | "staff-accounts" | "leaderboard";
 
 interface Stats {
   totalStudents: number;
@@ -156,6 +158,7 @@ export const DashboardScreen = () => {
     { label: "الأنشطة", icon: Activity, view: "activities" as AdminView },
     { label: "الإعلانات", icon: Bell, view: "announcements" as AdminView },
     { label: "التقارير", icon: FileText, view: "reports" as AdminView },
+    { label: "المتصدرين", icon: Trophy, view: "leaderboard" as AdminView },
 ] : [
     // Center admin actions - limited permissions
     { label: "الحلقات", icon: BookOpen, view: "halaqat" as AdminView },
@@ -169,6 +172,7 @@ export const DashboardScreen = () => {
     { label: "العطلات", icon: CalendarDays, view: "holidays" as AdminView },
     { label: "الإعلانات", icon: Bell, view: "announcements" as AdminView },
     { label: "التقارير", icon: FileText, view: "reports" as AdminView },
+    { label: "المتصدرين", icon: Trophy, view: "leaderboard" as AdminView },
   ];
 
   if (isLoading) {
@@ -298,6 +302,7 @@ export const DashboardScreen = () => {
               {adminView === "student-accounts" && "حسابات الطلاب"}
               {adminView === "parent-accounts" && "حسابات أولياء الأمور"}
               {adminView === "staff-accounts" && "حسابات المعلمين ومسؤولي التواصل"}
+              {adminView === "leaderboard" && "قائمة المتصدرين"}
             </h1>
           </div>
         </header>
@@ -315,6 +320,7 @@ export const DashboardScreen = () => {
           {adminView === "student-accounts" && <StudentAccountsList />}
           {adminView === "parent-accounts" && <ParentAccountsList />}
           {adminView === "staff-accounts" && <StaffAccountsList />}
+          {adminView === "leaderboard" && <StudentLeaderboard limit={30} />}
         </main>
       </div>
     );
