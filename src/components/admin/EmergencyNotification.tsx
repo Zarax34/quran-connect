@@ -285,14 +285,14 @@ export const EmergencyNotification = () => {
                 الحلقة (اختياري)
               </label>
               <Select
-                value={formData.selectedHalqaId}
-                onValueChange={(value) => setFormData({ ...formData, selectedHalqaId: value })}
+                value={formData.selectedHalqaId || "all"}
+                onValueChange={(value) => setFormData({ ...formData, selectedHalqaId: value === "all" ? "" : value })}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="جميع الحلقات" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">جميع الحلقات</SelectItem>
+                  <SelectItem value="all">جميع الحلقات</SelectItem>
                   {halaqat.map((halqa) => (
                     <SelectItem key={halqa.id} value={halqa.id}>
                       {halqa.name}
