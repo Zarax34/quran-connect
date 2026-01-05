@@ -33,6 +33,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import { AddStudentForm } from "@/components/forms/AddStudentForm";
 
 interface Student {
   id: string;
@@ -69,6 +70,7 @@ export const StudentsManagement = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [showAddStudentForm, setShowAddStudentForm] = useState(false);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [showCredentials, setShowCredentials] = useState(false);
   const [credentials, setCredentials] = useState<CredentialsInfo | null>(null);
@@ -372,22 +374,38 @@ export const StudentsManagement = () => {
     );
   }
 
+  // Show full screen add form for new students
+  if (showAddStudentForm) {
+    return (
+      <AddStudentForm 
+        onClose={() => setShowAddStudentForm(false)} 
+        onSuccess={(creds) => {
+          setShowAddStudentForm(false);
+          if (creds) {
+            setCredentials(creds);
+            setShowCredentials(true);
+          }
+          fetchStudents();
+        }} 
+      />
+    );
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <h2 className="text-xl font-bold text-foreground">إدارة الطلاب</h2>
         <div className="flex gap-2 flex-wrap">
           <ExportCredentials centerId={selectedCenterId} />
+          <Button className="gap-2" onClick={() => setShowAddStudentForm(true)}>
+            <Plus className="w-4 h-4" />
+            إضافة طالب
+          </Button>
+          {/* Edit Dialog */}
           <Dialog open={isDialogOpen} onOpenChange={(open) => {
             setIsDialogOpen(open);
             if (!open) resetForm();
           }}>
-            <DialogTrigger asChild>
-              <Button className="gap-2">
-                <Plus className="w-4 h-4" />
-                إضافة طالب
-              </Button>
-            </DialogTrigger>
           <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>

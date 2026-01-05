@@ -29,9 +29,12 @@ import {
   Loader2,
   Gift,
   Settings,
-  Image as ImageIcon
+  Image as ImageIcon,
+  ShoppingCart
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { AddGiftForm } from "@/components/forms/AddGiftForm";
+import { GiftRequestsScreen } from "@/components/forms/GiftRequestsScreen";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -65,6 +68,8 @@ export const BadgesManagement = () => {
   const [storeItems, setStoreItems] = useState<StoreItem[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isStoreDialogOpen, setIsStoreDialogOpen] = useState(false);
+  const [showAddGiftForm, setShowAddGiftForm] = useState(false);
+  const [showGiftRequests, setShowGiftRequests] = useState(false);
   const [editingBadge, setEditingBadge] = useState<BadgeSetting | null>(null);
   const [editingItem, setEditingItem] = useState<StoreItem | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -318,17 +323,38 @@ export const BadgesManagement = () => {
     );
   }
 
+  // Show full screen forms
+  if (showAddGiftForm) {
+    return (
+      <AddGiftForm 
+        onClose={() => setShowAddGiftForm(false)} 
+        onSuccess={() => {
+          setShowAddGiftForm(false);
+          fetchData();
+        }} 
+      />
+    );
+  }
+
+  if (showGiftRequests) {
+    return <GiftRequestsScreen onClose={() => setShowGiftRequests(false)} />;
+  }
+
   return (
     <div className="space-y-6">
       <Tabs defaultValue="badges" className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="badges" className="gap-2">
             <Award className="w-4 h-4" />
-            إعدادات الشارات
+            الشارات
           </TabsTrigger>
           <TabsTrigger value="store" className="gap-2">
             <Gift className="w-4 h-4" />
-            متجر الهدايا
+            المتجر
+          </TabsTrigger>
+          <TabsTrigger value="requests" className="gap-2">
+            <ShoppingCart className="w-4 h-4" />
+            الطلبات
           </TabsTrigger>
         </TabsList>
 
@@ -450,16 +476,17 @@ export const BadgesManagement = () => {
         <TabsContent value="store" className="mt-4 space-y-4">
           <div className="flex justify-between items-center">
             <h3 className="font-semibold text-foreground">متجر الهدايا</h3>
-            <Dialog open={isStoreDialogOpen} onOpenChange={(open) => {
-              setIsStoreDialogOpen(open);
-              if (!open) resetStoreForm();
-            }}>
-              <DialogTrigger asChild>
-                <Button size="sm">
-                  <Plus className="w-4 h-4 ml-1" />
-                  هدية جديدة
-                </Button>
-              </DialogTrigger>
+            <Button size="sm" onClick={() => setShowAddGiftForm(true)}>
+              <Plus className="w-4 h-4 ml-1" />
+              هدية جديدة
+            </Button>
+          </div>
+          
+          {/* Edit Dialog */}
+          <Dialog open={isStoreDialogOpen} onOpenChange={(open) => {
+            setIsStoreDialogOpen(open);
+            if (!open) resetStoreForm();
+          }}>
               <DialogContent>
                 <DialogHeader>
                   <DialogTitle>{editingItem ? "تعديل الهدية" : "إضافة هدية جديدة"}</DialogTitle>
@@ -534,8 +561,7 @@ export const BadgesManagement = () => {
                   </Button>
                 </div>
               </DialogContent>
-            </Dialog>
-          </div>
+          </Dialog>
 
           <div className="space-y-3">
             {storeItems.map(item => (
@@ -585,6 +611,18 @@ export const BadgesManagement = () => {
                 </div>
               </Card>
             ))}
+          </div>
+        </TabsContent>
+
+        {/* تبويب الطلبات */}
+        <TabsContent value="requests" className="mt-4">
+          <div className="text-center py-8">
+            <ShoppingCart className="w-16 h-16 mx-auto text-muted-foreground/50 mb-4" />
+            <h3 className="font-semibold text-foreground mb-2">طلبات شراء الجوائز</h3>
+            <p className="text-muted-foreground mb-4">إدارة وتأكيد طلبات الطلاب</p>
+            <Button onClick={() => setShowGiftRequests(true)}>
+              عرض جميع الطلبات
+            </Button>
           </div>
         </TabsContent>
       </Tabs>
