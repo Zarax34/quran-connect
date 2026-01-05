@@ -1598,6 +1598,7 @@ export type Database = {
           student_count: number
         }[]
       }
+      get_halqa_center_id: { Args: { _halqa_id: string }; Returns: string }
       get_halqa_total_points: { Args: { _halqa_id: string }; Returns: number }
       get_student_available_badges: {
         Args: { _student_id: string }
@@ -1607,6 +1608,7 @@ export type Database = {
         Args: { _student_id: string }
         Returns: number
       }
+      get_student_center_id: { Args: { _student_id: string }; Returns: string }
       get_student_points_details: {
         Args: { _student_id: string }
         Returns: {
