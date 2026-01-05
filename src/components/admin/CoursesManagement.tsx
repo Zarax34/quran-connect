@@ -32,6 +32,7 @@ import { Plus, Edit, Trash2, Search, Users } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
+import { AddCourseForm } from "@/components/forms/AddCourseForm";
 
 interface Course {
   id: string;
@@ -74,6 +75,7 @@ export const CoursesManagement = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isRegDialogOpen, setIsRegDialogOpen] = useState(false);
+  const [showAddCourseForm, setShowAddCourseForm] = useState(false);
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
   const [formData, setFormData] = useState({
@@ -262,60 +264,65 @@ export const CoursesManagement = () => {
 
   const filteredCourses = courses.filter((c) => c.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
+  // Show full screen add form
+  if (showAddCourseForm) {
+    return (
+      <AddCourseForm 
+        onClose={() => setShowAddCourseForm(false)} 
+        onSuccess={() => {
+          setShowAddCourseForm(false);
+          fetchCourses();
+        }} 
+      />
+    );
+  }
+
   return (
     <Card className="border-border/50">
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="text-xl text-foreground">إدارة الدورات</CardTitle>
-        <Dialog open={isDialogOpen} onOpenChange={(open) => { setIsDialogOpen(open); if (!open) resetForm(); }}>
-          <DialogTrigger asChild>
-            <Button className="gap-2"><Plus className="h-4 w-4" />إضافة دورة</Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle className="text-foreground">{editingCourse ? "تعديل دورة" : "إضافة دورة جديدة"}</DialogTitle>
-            </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {isSuperAdmin && !editingCourse && (
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground">المركز *</label>
-                  <Select value={formData.center_id} onValueChange={(v) => setFormData({ ...formData, center_id: v })}>
-                    <SelectTrigger><SelectValue placeholder="اختر المركز" /></SelectTrigger>
-                    <SelectContent>
-                      {centers.map((c) => (<SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground">اسم الدورة *</label>
-                <Input value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} placeholder="أدخل اسم الدورة" className="text-right" />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground">الوصف</label>
-                <Textarea value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} placeholder="وصف الدورة" className="text-right" />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground">تاريخ البداية *</label>
-                  <Input type="date" value={formData.start_date} onChange={(e) => setFormData({ ...formData, start_date: e.target.value })} />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground">تاريخ النهاية *</label>
-                  <Input type="date" value={formData.end_date} onChange={(e) => setFormData({ ...formData, end_date: e.target.value })} />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground">الحد الأقصى للمشاركين</label>
-                <Input type="number" value={formData.max_participants} onChange={(e) => setFormData({ ...formData, max_participants: e.target.value })} placeholder="اختياري" />
-              </div>
-              <div className="flex gap-2 pt-4">
-                <Button type="submit" disabled={isSubmitting} className="flex-1">{isSubmitting ? "جاري الحفظ..." : editingCourse ? "تحديث" : "إضافة"}</Button>
-                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)} className="flex-1">إلغاء</Button>
-              </div>
-            </form>
-          </DialogContent>
-        </Dialog>
+        <Button className="gap-2" onClick={() => setShowAddCourseForm(true)}>
+          <Plus className="h-4 w-4" />إضافة دورة
+        </Button>
       </CardHeader>
+      
+      {/* Edit Dialog */}
+      <Dialog open={isDialogOpen} onOpenChange={(open) => { setIsDialogOpen(open); if (!open) resetForm(); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-foreground">تعديل دورة</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">اسم الدورة *</label>
+              <Input value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} placeholder="أدخل اسم الدورة" className="text-right" />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">الوصف</label>
+              <Textarea value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} placeholder="وصف الدورة" className="text-right" />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">تاريخ البداية *</label>
+                <Input type="date" value={formData.start_date} onChange={(e) => setFormData({ ...formData, start_date: e.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">تاريخ النهاية *</label>
+                <Input type="date" value={formData.end_date} onChange={(e) => setFormData({ ...formData, end_date: e.target.value })} />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">الحد الأقصى للمشاركين</label>
+              <Input type="number" value={formData.max_participants} onChange={(e) => setFormData({ ...formData, max_participants: e.target.value })} placeholder="اختياري" />
+            </div>
+            <div className="flex gap-2 pt-4">
+              <Button type="submit" disabled={isSubmitting} className="flex-1">{isSubmitting ? "جاري الحفظ..." : "تحديث"}</Button>
+              <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)} className="flex-1">إلغاء</Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
       <CardContent>
         <div className="mb-4 relative">
           <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
