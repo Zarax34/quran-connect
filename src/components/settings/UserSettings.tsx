@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { User, Lock, Sun, Moon, Loader2, Save, Eye, EyeOff, Fingerprint, Bell, Trash2 } from "lucide-react";
+import { User, Lock, Sun, Moon, Loader2, Save, Eye, EyeOff, Fingerprint, Bell, Trash2, KeyRound } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +11,7 @@ import { useTheme } from "@/contexts/ThemeContext";
 import { useCredentialsStorage } from "@/hooks/useCredentialsStorage";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { toast } from "sonner";
+import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -22,6 +23,14 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 export const UserSettings = () => {
   const { profile, user } = useAuth();
@@ -31,7 +40,10 @@ export const UserSettings = () => {
     toggleBiometric, 
     clearCredentials, 
     hasStoredCredentials,
-    isBiometricAvailable 
+    isBiometricAvailable,
+    setPin,
+    disablePin,
+    isPinEnabled
   } = useCredentialsStorage();
   const { registerForPushNotifications } = usePushNotifications(user?.id);
   
@@ -46,6 +58,11 @@ export const UserSettings = () => {
   
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  
+  const [showPinDialog, setShowPinDialog] = useState(false);
+  const [newPin, setNewPin] = useState("");
+  const [confirmPin, setConfirmPin] = useState("");
+  const [pinStep, setPinStep] = useState<'enter' | 'confirm'>('enter');
 
   useEffect(() => {
     const checkBiometric = async () => {
@@ -164,6 +181,48 @@ export const UserSettings = () => {
     toast.success("تم حذف بيانات الدخول المحفوظة");
   };
 
+  const handleSetPin = () => {
+    if (pinStep === 'enter') {
+      if (newPin.length !== 4) {
+        toast.error("يجب إدخال 4 أرقام");
+        return;
+      }
+      setPinStep('confirm');
+    } else {
+      if (confirmPin !== newPin) {
+        toast.error("رمز PIN غير متطابق");
+        setConfirmPin("");
+        return;
+      }
+      const success = setPin(newPin);
+      if (success) {
+        toast.success("تم تعيين رمز PIN بنجاح");
+        setShowPinDialog(false);
+        setNewPin("");
+        setConfirmPin("");
+        setPinStep('enter');
+      } else {
+        toast.error("حدث خطأ في تعيين رمز PIN");
+      }
+    }
+  };
+
+  const handleDisablePin = () => {
+    const success = disablePin();
+    if (success) {
+      toast.success("تم إلغاء رمز PIN");
+    } else {
+      toast.error("حدث خطأ في إلغاء رمز PIN");
+    }
+  };
+
+  const openPinDialog = () => {
+    setNewPin("");
+    setConfirmPin("");
+    setPinStep('enter');
+    setShowPinDialog(true);
+  };
+
   return (
     <div className="space-y-6">
       {/* Theme Settings */}
@@ -239,6 +298,46 @@ export const UserSettings = () => {
               </AlertDialogContent>
             </AlertDialog>
           )}
+
+          {/* PIN Settings */}
+          <div className="pt-4 border-t border-border/50 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="space-y-1">
+                <Label className="text-foreground flex items-center gap-2">
+                  <KeyRound className="w-4 h-4" />
+                  الدخول برمز PIN
+                </Label>
+                <p className="text-sm text-muted-foreground">
+                  {isPinEnabled 
+                    ? "رمز PIN مفعّل - يمكنك الدخول بـ 4 أرقام"
+                    : "استخدم رمز من 4 أرقام للدخول السريع"}
+                </p>
+              </div>
+              <Switch
+                checked={isPinEnabled}
+                onCheckedChange={(checked) => {
+                  if (checked) {
+                    openPinDialog();
+                  } else {
+                    handleDisablePin();
+                  }
+                }}
+                disabled={!hasStoredCredentials}
+              />
+            </div>
+
+            {isPinEnabled && (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={openPinDialog}
+                className="gap-2"
+              >
+                <KeyRound className="w-4 h-4" />
+                تغيير رمز PIN
+              </Button>
+            )}
+          </div>
         </div>
       </Card>
 
@@ -354,6 +453,63 @@ export const UserSettings = () => {
           </Button>
         </form>
       </Card>
+
+      {/* PIN Dialog */}
+      <Dialog open={showPinDialog} onOpenChange={setShowPinDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-center">
+              {pinStep === 'enter' ? 'تعيين رمز PIN' : 'تأكيد رمز PIN'}
+            </DialogTitle>
+            <DialogDescription className="text-center">
+              {pinStep === 'enter' 
+                ? 'أدخل رمزاً من 4 أرقام للدخول السريع'
+                : 'أعد إدخال الرمز للتأكيد'}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="flex justify-center py-6">
+            <InputOTP 
+              maxLength={4} 
+              value={pinStep === 'enter' ? newPin : confirmPin}
+              onChange={(value) => {
+                if (pinStep === 'enter') {
+                  setNewPin(value);
+                } else {
+                  setConfirmPin(value);
+                }
+              }}
+            >
+              <InputOTPGroup>
+                <InputOTPSlot index={0} />
+                <InputOTPSlot index={1} />
+                <InputOTPSlot index={2} />
+                <InputOTPSlot index={3} />
+              </InputOTPGroup>
+            </InputOTP>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setShowPinDialog(false);
+                setNewPin("");
+                setConfirmPin("");
+                setPinStep('enter');
+              }}
+            >
+              إلغاء
+            </Button>
+            <Button 
+              onClick={handleSetPin}
+              disabled={(pinStep === 'enter' ? newPin.length : confirmPin.length) !== 4}
+            >
+              {pinStep === 'enter' ? 'التالي' : 'تأكيد'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
