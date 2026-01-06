@@ -6,6 +6,8 @@ interface StoredCredentials {
   centerId: string;
   centerName: string;
   biometricEnabled: boolean;
+  pin?: string;
+  pinEnabled?: boolean;
 }
 
 const CREDENTIALS_KEY = 'quran_app_credentials';
@@ -64,6 +66,46 @@ export const useCredentialsStorage = () => {
     }
   }, [storedCredentials]);
 
+  // Set PIN for quick login
+  const setPin = useCallback((pin: string) => {
+    try {
+      if (storedCredentials) {
+        const updated = { ...storedCredentials, pin, pinEnabled: true };
+        localStorage.setItem(CREDENTIALS_KEY, JSON.stringify(updated));
+        setStoredCredentials(updated);
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Error setting PIN:', error);
+      return false;
+    }
+  }, [storedCredentials]);
+
+  // Disable PIN
+  const disablePin = useCallback(() => {
+    try {
+      if (storedCredentials) {
+        const updated = { ...storedCredentials, pin: undefined, pinEnabled: false };
+        localStorage.setItem(CREDENTIALS_KEY, JSON.stringify(updated));
+        setStoredCredentials(updated);
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Error disabling PIN:', error);
+      return false;
+    }
+  }, [storedCredentials]);
+
+  // Verify PIN
+  const verifyPin = useCallback((inputPin: string): boolean => {
+    if (storedCredentials?.pinEnabled && storedCredentials?.pin) {
+      return storedCredentials.pin === inputPin;
+    }
+    return false;
+  }, [storedCredentials]);
+
   // Clear stored credentials
   const clearCredentials = useCallback(() => {
     try {
@@ -102,7 +144,11 @@ export const useCredentialsStorage = () => {
     clearCredentials,
     isBiometricAvailable,
     authenticateWithBiometric,
+    setPin,
+    disablePin,
+    verifyPin,
     hasStoredCredentials: !!storedCredentials,
-    isBiometricEnabled: storedCredentials?.biometricEnabled || false
+    isBiometricEnabled: storedCredentials?.biometricEnabled || false,
+    isPinEnabled: storedCredentials?.pinEnabled || false
   };
 };
