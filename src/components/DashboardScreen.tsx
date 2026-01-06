@@ -26,6 +26,7 @@ import {
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -68,10 +69,15 @@ interface RecentReport {
   status: string;
 }
 
+interface Center {
+  id: string;
+  name: string;
+}
+
 export const DashboardScreen = () => {
   const [activeTab, setActiveTab] = useState<TabType>("home");
   const [adminView, setAdminView] = useState<AdminView>("dashboard");
-  const { user, profile, signOut, isSuperAdmin, selectedCenterId, roles } = useAuth();
+  const { user, profile, signOut, isSuperAdmin, selectedCenterId, setSelectedCenterId, roles } = useAuth();
   const [stats, setStats] = useState<Stats>({
     totalStudents: 0,
     activeHalaqat: 0,
@@ -80,6 +86,8 @@ export const DashboardScreen = () => {
   });
   const [recentReports, setRecentReports] = useState<RecentReport[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [centers, setCenters] = useState<Center[]>([]);
+  const [filterCenterId, setFilterCenterId] = useState<string>("all");
   
   const isParent = roles.some(r => r.role === "parent");
   const isStudent = roles.some(r => r.role === "student");
@@ -88,19 +96,40 @@ export const DashboardScreen = () => {
   const isCenterAdmin = roles.some(r => r.role === "center_admin");
   const isAdmin = isSuperAdmin || isCenterAdmin;
 
+  // Fetch centers for super admin filtering
+  useEffect(() => {
+    if (isSuperAdmin) {
+      fetchCenters();
+    }
+  }, [isSuperAdmin]);
+
+  const fetchCenters = async () => {
+    const { data } = await supabase
+      .from("centers")
+      .select("id, name")
+      .eq("is_active", true)
+      .order("name");
+    if (data) setCenters(data);
+  };
+
   useEffect(() => {
     fetchDashboardData();
-  }, [selectedCenterId, isSuperAdmin]);
+  }, [selectedCenterId, isSuperAdmin, filterCenterId]);
 
   const fetchDashboardData = async () => {
     try {
+      // Use filterCenterId for super admin, selectedCenterId for others
+      const activeCenterId = isSuperAdmin 
+        ? (filterCenterId !== "all" ? filterCenterId : null) 
+        : selectedCenterId;
+
       let studentsQuery = supabase
         .from("students")
         .select("*", { count: "exact", head: true })
         .eq("is_active", true);
       
-      if (!isSuperAdmin && selectedCenterId) {
-        studentsQuery = studentsQuery.eq("center_id", selectedCenterId);
+      if (activeCenterId) {
+        studentsQuery = studentsQuery.eq("center_id", activeCenterId);
       }
       
       const { count: studentsCount } = await studentsQuery;
@@ -110,16 +139,22 @@ export const DashboardScreen = () => {
         .select("*", { count: "exact", head: true })
         .eq("is_active", true);
       
-      if (!isSuperAdmin && selectedCenterId) {
-        halaqatQuery = halaqatQuery.eq("center_id", selectedCenterId);
+      if (activeCenterId) {
+        halaqatQuery = halaqatQuery.eq("center_id", activeCenterId);
       }
       
       const { count: halaqatCount } = await halaqatQuery;
 
-      const { count: teachersCount } = await supabase
+      let teachersQuery = supabase
         .from("user_roles")
         .select("*", { count: "exact", head: true })
         .eq("role", "teacher");
+      
+      if (activeCenterId) {
+        teachersQuery = teachersQuery.eq("center_id", activeCenterId);
+      }
+
+      const { count: teachersCount } = await teachersQuery;
 
       setStats({
         totalStudents: studentsCount || 0,
@@ -368,6 +403,26 @@ export const DashboardScreen = () => {
       default:
         return (
           <>
+            {/* Center Filter for Super Admin */}
+            {isSuperAdmin && centers.length > 0 && (
+              <div className="mb-4">
+                <label className="text-sm font-medium text-foreground mb-2 block">فلترة حسب المركز</label>
+                <Select value={filterCenterId} onValueChange={setFilterCenterId}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="اختر المركز" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">جميع المراكز</SelectItem>
+                    {centers.map((center) => (
+                      <SelectItem key={center.id} value={center.id}>
+                        {center.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-3">
               {STATS_CONFIG.map((stat, index) => (
                 <Card 

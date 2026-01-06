@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
+import { Capacitor } from '@capacitor/core';
+import { NativeBiometric, BiometryType } from 'capacitor-native-biometric';
 
 interface StoredCredentials {
   identifier: string;
@@ -118,22 +120,57 @@ export const useCredentialsStorage = () => {
     }
   }, []);
 
-  // Check if biometric is available (placeholder for Capacitor integration)
+  // Check if biometric is available using native plugin
   const isBiometricAvailable = useCallback(async (): Promise<boolean> => {
-    // This will be implemented with Capacitor's biometric plugin
-    // For now, return true if running in a mobile context
-    return 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    // Only check on native platforms
+    if (!Capacitor.isNativePlatform()) {
+      // For web, return true if touch is available (for testing)
+      return 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    }
+
+    try {
+      const result = await NativeBiometric.isAvailable();
+      return result.isAvailable;
+    } catch (error) {
+      console.error('Error checking biometric availability:', error);
+      return false;
+    }
   }, []);
 
-  // Authenticate with biometric (placeholder for Capacitor integration)
+  // Authenticate with biometric using native plugin
   const authenticateWithBiometric = useCallback(async (): Promise<boolean> => {
-    // This will be implemented with Capacitor's biometric plugin
-    // For now, simulate success if biometric is enabled
-    if (storedCredentials?.biometricEnabled) {
-      // In a real implementation, this would trigger the device's biometric prompt
-      return true;
+    if (!storedCredentials?.biometricEnabled) {
+      return false;
     }
-    return false;
+
+    // On native platform, use real biometric
+    if (Capacitor.isNativePlatform()) {
+      try {
+        // Check if available first
+        const availability = await NativeBiometric.isAvailable();
+        if (!availability.isAvailable) {
+          return false;
+        }
+
+        // Perform biometric verification
+        await NativeBiometric.verifyIdentity({
+          reason: 'تسجيل الدخول إلى تطبيق حلقات القرآن',
+          title: 'تأكيد الهوية',
+          subtitle: 'استخدم البصمة للدخول',
+          description: '',
+          useFallback: true,
+          fallbackTitle: 'استخدم كلمة المرور',
+        });
+
+        return true;
+      } catch (error) {
+        console.error('Biometric authentication failed:', error);
+        return false;
+      }
+    }
+
+    // On web, simulate success for testing
+    return true;
   }, [storedCredentials]);
 
   return {
